@@ -97,4 +97,4 @@ cython_debug/
 a.out
 *.o
 
-baygon/version.py
+score/version.py

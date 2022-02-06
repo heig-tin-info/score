@@ -7,17 +7,18 @@ import io
 Points = namedtuple('Points', ['got', 'total', 'bonus'])
 
 class Score:
-    def __init__(self, data=None, file=None):
-        if isinstance(file, io.TextIOBase):
-            data = Criteria(yaml.load(file, Loader=yaml.FullLoader))
-        elif isinstance(file, str):
-            with open(file) as f:
+    def __init__(self, data):
+        if isinstance(data, io.TextIOBase):
+            data = Criteria(yaml.load(data, Loader=yaml.FullLoader))
+        elif isinstance(data, str):
+            with open(data) as f:
                 data = Criteria(yaml.load(f, Loader=yaml.FullLoader))
         self.data = Criteria(data)
 
     @property
     def mark(self):
-        return self._note(self.points.got, self.points.total)
+        return min(6.0, round(self.got / self.total * 5. + 1., 1))
+
 
     @property
     def points(self):
@@ -31,12 +32,13 @@ class Score:
     def bonus(self):
         return self.points.bonus
 
+    @property 
+    def got(self):
+        return self.points.got
+
     @property
     def success(self):
         return self.mark >= 4.0
-
-    def _note(got, total):
-        return round(got / total * 5. + 1., 1)
 
     def _get_points(self, u):
         got = 0
@@ -44,17 +46,19 @@ class Score:
         bonus = 0
         for k, v in u.items():
             if isinstance(v, dict):
-                _bonus, _got, _total = self._get_points(v)
-                got += _got
-                total += _total
-                bonus += _bonus
+                pts = self._get_points(v)
+                got += pts.got
+                total += pts.total
+                bonus += pts.bonus
             elif isinstance(v, list) and k in ['$points', '$pts']:
                 _got, _total = v
+                if _total > 0 and _got > _total: 
+                    raise ValueError('Got more points than possible')
                 got += float(_got)
                 total += float(_total) if float(_total) > 0 else 0
             elif isinstance(v, list) and k == '$bonus':
                 _got, _total = v
                 bonus += float(_got)
                 got += float(_got)
-        return Points(got, total, bonus)
+        return Points(got=got, total=total, bonus=bonus)
 

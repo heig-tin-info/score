@@ -18,7 +18,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install flake8 tox tox-gh-actions setuptools setuptools_scm
       - name: Lint with flake8
-        run: flake8 baygon --count --show-source --statistics
+        run: flake8 score --count --show-source --statistics
       - name: Test with tox
         run: tox
   release:

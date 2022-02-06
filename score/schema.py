@@ -11,5 +11,3 @@ Section = Schema({
 Criteria = Schema({
     'criteria': Section
 })
-
-

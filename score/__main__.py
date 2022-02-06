@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import click
 
-from .score import Score 
+from .score import Score
+
 
 @click.command()
 @click.argument('file', type=click.File('r'), default='criteria.yml')
@@ -11,7 +12,8 @@ def cli(file, verbose):
     if verbose:
         print(f'Got {score.got:g} points + {score.bonus:g} points out of {score.total:g} points')
 
-    click.secho(f'{score.mark:g}', fg= "green" if score.success else "red")
+    click.secho(f'{score.mark:g}', fg="green" if score.success else "red")
+
 
 if __name__ == '__main__':
     cli()

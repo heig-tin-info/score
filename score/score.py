@@ -18,7 +18,7 @@ class Score:
 
     @property
     def mark(self):
-        return max(1.0, min(6.0, round(self.got / self.total * 5. + 1.)))
+        return max(1.0, min(6.0, round(5. * self.got / self.total + 1., 1)))
 
     @property
     def points(self):

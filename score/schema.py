@@ -33,9 +33,10 @@ class Validate:
                         node = node[key]
                     else:
                         break
-                print(
-                    f"Error: validation failed on line {node._yaml_line_col.line}:{node._yaml_line_col.col} (/{path}): {e.error_message}")
-            except:
+                print(f"Error: validation failed on line"
+                      f"{node._yaml_line_col.line}:"
+                      f"{node._yaml_line_col.col} (/{path}): {e.error_message}")
+            except Exception as e:
                 print(e)
         else:
             return self.data

@@ -1,5 +1,5 @@
 from voluptuous import Invalid, Optional, Schema, Required, All, Any, Self, Length, Coerce
-from ruamel.yaml import load, RoundTripLoader
+import yaml
 
 Section = Schema({
     Optional(Any('$description', '$desc')): str,
@@ -18,7 +18,7 @@ Criteria = Schema({
 
 class Validate:
     def __init__(self, stream):
-        self._yaml = load(stream, Loader=RoundTripLoader)
+        self._yaml = yaml.load(stream, Loader=yaml.FullLoader)
         return self.validate()
 
     def validate(self):

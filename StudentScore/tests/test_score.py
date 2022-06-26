@@ -1,6 +1,6 @@
 import os
 from unittest import TestCase
-from score import Score
+from StudentScore import Score
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 

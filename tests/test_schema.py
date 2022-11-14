@@ -1,7 +1,8 @@
 from unittest import TestCase
 
-from StudentScore.schema import Criteria
 from voluptuous.error import MultipleInvalid
+
+from StudentScore.schema import Criteria
 
 
 class TestCriteria(TestCase):

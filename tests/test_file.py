@@ -1,9 +1,5 @@
 from pathlib import Path
 from unittest import TestCase
-<<<<<<< HEAD:tests/test_file.py
-=======
-from StudentScore import Score
->>>>>>> refs/remotes/origin/master:StudentScore/tests/test_score.py
 
 from StudentScore import Score
 
@@ -14,9 +10,9 @@ class TestCriteria(TestCase):
     def test_file(self):
         with open(dir_path.joinpath('criteria.yml'), encoding='utf8') as f:
             data = Score(f)
-        self.assertEqual(data.mark, 4.8)
+        self.assertEqual(data.mark, 4.5)
         self.assertEqual(data.points.got, 9)
-        self.assertEqual(data.points.total, 12)
+        self.assertEqual(data.points.total, 13)
         self.assertEqual(data.points.bonus, 2)
         self.assertTrue(data.success)
 

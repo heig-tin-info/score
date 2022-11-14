@@ -15,7 +15,7 @@ criteria:
           $points: [1, 3]
         4:
           $desc: Four
-          $points: [0, 0]
+          $points: [0, 1]
   code:
     implementation:
       smart-pointer:

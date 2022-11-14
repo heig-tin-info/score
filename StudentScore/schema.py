@@ -62,9 +62,9 @@ Pair = All(Any(
 ), ValidPoints())
 
 Section = Schema({
-    str: Any({
+    Any(str, All(int, Coerce(int))): Any({
         Required(Any('$points', '$bonus')): Pair,
-        Required('$description', '$desc'): Any(str, [str]),
+        Required(Any('$description', '$desc')): Any(str, [str]),
         Optional('$rationale'): Any(str, [str]),
         Optional('$test'): str
     }, Self)
@@ -75,27 +75,30 @@ Criteria = Schema({
 })
 
 
-class Validate:
-    def __init__(self, stream):
-        self._yaml = yaml.load(stream, Loader=yaml.FullLoader)
-        return self.validate()
+# class Validate:
+#     """ Validate schema. """
 
-    def validate(self):
-        try:
-            self.data = Criteria(self._yaml)
-        except Invalid as e:
-            path = '/'.join(e.path)
-            try:
-                node = self._yaml
-                for key in e.path:
-                    if (hasattr(node[key], '_yaml_line_col')):
-                        node = node[key]
-                    else:
-                        break
-                print(f"Error: validation failed on line"
-                      f"{node._yaml_line_col.line}:"
-                      f"{node._yaml_line_col.col} (/{path}): {e.error_message}")
-            except Exception as e:
-                print(e)
-        else:
-            return self.data
+#     def __init__(self, stream):
+#         self._yaml = yaml.load(stream, Loader=yaml.FullLoader)
+#         return self.validate()
+
+#     def validate(self):
+#         """ Validate schema. """
+#         try:
+#             self.data = Criteria(self._yaml)
+#         except Invalid as exept:
+#             path = '/'.join(exept.path)
+#             try:
+#                 node = self._yaml
+#                 for key in exept.path:
+#                     if (hasattr(node[key], '_yaml_line_col')):
+#                         node = node[key]
+#                     else:
+#                         break
+#                 print(f"Error: validation failed on line"
+#                       f"{node._yaml_line_col.line}:"
+#                       f"{node._yaml_line_col.col} (/{path}): {exept.error_message}")
+#             except Exception as ex:
+#                 print(ex)
+
+#         return self.data

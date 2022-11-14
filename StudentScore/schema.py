@@ -37,16 +37,17 @@ class ValidPoints(object):
     def __call__(self, v):
         obtained, total = v
 
-        if total < 0 and obtained < total:
+        if obtained < total < 0:
             raise InvalidPoint((
                 f'Given points ({obtained}) cannot be smaller '
                 f"than available penalty ({total})."))
         if total < 0 < obtained:
             raise InvalidPoint((
                 f'Given points ({obtained}) cannot be bigger '
-                f'than zero with penality criteria ({total}).'))
+                f'than zero with penalty criteria ({total}).'))
         if total > 0 > obtained:
-            raise InvalidPoint(f'Given points ({obtained}) cannot be smaller than zero.')
+            raise InvalidPoint(
+                f'Given points ({obtained}) cannot be smaller than zero.')
         if obtained > total > 0:
             raise InvalidPoint(
                 f'Given points ({obtained}) cannot be greater than available points ({total}).')
@@ -61,18 +62,19 @@ Pair = All(Any(
     All(ExactSequence([Percent, int]), lambda x: [abs(x[0]) * x[1], x[1]])
 ), ValidPoints())
 
+DescriptionKey = Any('$description', '$desc')
+
 Section = Schema({
-    Any(str, All(int, Coerce(int))): Any({
+    Optional(DescriptionKey): str,
+    Coerce(str): Any({
         Required(Any('$points', '$bonus')): Pair,
-        Required(Any('$description', '$desc')): Any(str, [str]),
+        Required(DescriptionKey): Any(str, [str]),
         Optional('$rationale'): Any(str, [str]),
         Optional('$test'): str
     }, Self)
 })
 
-Criteria = Schema({
-    'criteria': Section
-})
+Criteria = Schema(Section)
 
 
 # class Validate:

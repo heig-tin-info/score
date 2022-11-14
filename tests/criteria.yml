@@ -2,6 +2,7 @@
 ---
 criteria:
   testing:
+    $description: Global description for testing
     tests:
       build:
         $description: The program builds correctly

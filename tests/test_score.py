@@ -23,18 +23,30 @@ class TestScore(TestCase):
         self.assertEqual(data.points.bonus, 0)
         self.assertTrue(data.success)
 
+    def test_score(self):
+        data = Score(str(
+            Path(__file__)
+            .resolve(strict=True).parent
+            .joinpath('criteria.yml'))
+        )
+        print(f'{data.points.got}/{data.points.total}')
+        self.assertEqual(data.mark, 4.5)
+        self.assertEqual(data.points.got, 9)
+        self.assertEqual(data.points.total, 13)
+        self.assertEqual(data.points.bonus, 2)
+        self.assertTrue(data.success)
 
     def test_zero_total(self):
-            with self.assertRaises(ValueError):
-                data = Score({
-                    "criteria": {
-                        "test": {
-                            "$description": "Description",
-                            "$bonus": [2, 2]
-                        }
+        with self.assertRaises(ValueError):
+            data = Score({
+                "criteria": {
+                    "test": {
+                        "$description": "Description",
+                        "$bonus": [2, 2]
                     }
-                })
-                mark = data.mark
+                }
+            })
+            mark = data.mark
 
     def test_bonus(self):
 

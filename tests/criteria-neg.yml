@@ -7,15 +7,15 @@ criteria:
         $description: The program builds correctly
         $points: [-2, -4]
       unit-testing:
-        foo: 
+        foo:
           $description: Foo function works
-          $points: [0, 3]          
+          $points: [0, 3]
         bar:
           $description: Bar function works
-          $points: [0, 3]        
+          $points: [0, 3]
   code:
     implementation:
-      smart-pointer: 
+      smart-pointer:
         $description: Smart pointers are used correcly
         $points: [0, 4]
     overall:

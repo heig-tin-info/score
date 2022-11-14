@@ -1,8 +1,10 @@
 
-from .schema import Criteria
-from collections import namedtuple
-import yaml
 import io
+from collections import namedtuple
+
+import yaml
+
+from .schema import Criteria
 
 Points = namedtuple('Points', ['got', 'total', 'bonus'])
 
@@ -12,7 +14,7 @@ class Score:
         if isinstance(data, io.TextIOBase):
             data = Criteria(yaml.load(data, Loader=yaml.FullLoader))
         elif isinstance(data, str):
-            with open(data) as f:
+            with open(data, 'rt', encoding='utf8') as f:
                 data = Criteria(yaml.load(f, Loader=yaml.FullLoader))
         self.data = Criteria(data)
 
@@ -52,8 +54,6 @@ class Score:
                 bonus += pts.bonus
             elif isinstance(v, list) and k in ['$points', '$pts']:
                 _got, _total = v
-                if _total > 0 and _got > _total:
-                    raise ValueError('Got more points than possible')
                 got += float(_got)
                 total += float(_total) if float(_total) > 0 else 0
             elif isinstance(v, list) and k == '$bonus':

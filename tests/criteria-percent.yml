@@ -1,0 +1,40 @@
+# Critères d'évaluation du travail pratique
+---
+criteria:
+  testing:
+    tests:
+      build:
+        $description: The program builds correctly
+        $points: [-2, -4]
+      unit-testing:
+        foo:
+          $description: Foo function works
+          $points: [100%, 3]
+        bar:
+          $description: Bar function works
+          $points: [1, 3]
+  code:
+    implementation:
+      smart-pointer:
+        $description: Smart pointers are used correctly
+        $points: [4, 4]
+    overall:
+      dry:
+        $description: No repeated code
+        $points: [0%, -5]
+      kiss:
+        $description: No unnecessary code
+        $points: [-1, -5]
+      ssot:
+        $description: No redundant information
+        $points: [0, -5]
+      indentation:
+        $description: Indentation is correct
+        $points: [0, -3]
+  bonus:
+    test_framework:
+      $description: Use a test framework
+      $bonus: [2, 2]
+    extension:
+      $description: Program goes beyond the scope of the assignment
+      $bonus: [0, 3]

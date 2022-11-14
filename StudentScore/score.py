@@ -20,6 +20,8 @@ class Score:
 
     @property
     def mark(self):
+        if self.total == 0:
+            raise ValueError('Total is zero points')
         return max(1.0, min(6.0, round(5. * self.got / self.total + 1., 1)))
 
     @property

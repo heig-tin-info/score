@@ -1,6 +1,7 @@
 from unittest import TestCase
 
-from StudentScore.schema import Criteria, InvalidPoint
+from StudentScore.schema import Criteria
+from voluptuous.error import MultipleInvalid
 
 
 class TestCriteria(TestCase):
@@ -15,7 +16,7 @@ class TestCriteria(TestCase):
         })
 
     def test_max(self):
-        with self.assertRaises(InvalidPoint):
+        with self.assertRaises(MultipleInvalid):
             Criteria({
                 "criteria": {
                     "test": {
@@ -26,7 +27,7 @@ class TestCriteria(TestCase):
             })
 
     def test_below(self):
-        with self.assertRaises(InvalidPoint):
+        with self.assertRaises(MultipleInvalid):
             Criteria({
                 "criteria": {
                     "test": {
@@ -37,7 +38,7 @@ class TestCriteria(TestCase):
             })
 
     def test_min(self):
-        with self.assertRaises(InvalidPoint):
+        with self.assertRaises(MultipleInvalid):
             Criteria({
                 "criteria": {
                     "test": {
@@ -48,7 +49,7 @@ class TestCriteria(TestCase):
             })
 
     def test_zero(self):
-        with self.assertRaises(InvalidPoint):
+        with self.assertRaises(MultipleInvalid):
             Criteria({
                 "criteria": {
                     "test": {
@@ -67,3 +68,14 @@ class TestCriteria(TestCase):
                 }
             }
         })
+
+    def test_smaller(self):
+        with self.assertRaises(MultipleInvalid):
+            Criteria({
+                "criteria": {
+                    "test": {
+                        "$description": "Description",
+                        "$points": [2, -2]
+                    }
+                }
+            })

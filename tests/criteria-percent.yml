@@ -24,7 +24,7 @@ criteria:
         $points: [0%, -5]
       kiss:
         $description: No unnecessary code
-        $points: [-1, -5]
+        $points: [-10%, -5]
       ssot:
         $description: No redundant information
         $points: [0, -5]
@@ -34,7 +34,7 @@ criteria:
   bonus:
     test_framework:
       $description: Use a test framework
-      $bonus: [2, 2]
+      $bonus: [100%, 2]
     extension:
       $description: Program goes beyond the scope of the assignment
-      $bonus: [0, 3]
+      $bonus: [0%, 3]

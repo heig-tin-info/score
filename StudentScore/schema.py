@@ -18,26 +18,38 @@ class InvalidPoint(Invalid):
     """Invalid points."""
 
 
-re_percent = r'(\d+(?:\.\d+)?)\%'
+re_percent = r'(-?\d+(?:\.\d+)?)\%'
 
-Percent = All(str, Match(re_percent), Replace(re_percent, r'\1'), Coerce(int), Range(0, 100))
+Percent = All(str,
+              Match(re_percent),
+              Replace(re_percent, r'\1'),
+              Coerce(float),
+              Range(-100, 100),
+              lambda x: x/100
+              )
 
 
 class ValidPoints(object):
     """
     Verify the number of points given.
     """
+
     def __call__(self, v):
         obtained, total = v
 
         if total < 0 and obtained < total:
-            raise InvalidPoint('Given points cannot be smaller than available penalty.')
+            raise InvalidPoint((
+                f'Given points ({obtained}) cannot be smaller '
+                f"than available penalty ({total})."))
         if total < 0 < obtained:
-            raise InvalidPoint('Given points cannot be bigger than zero with penality criteria.')
+            raise InvalidPoint((
+                f'Given points ({obtained}) cannot be bigger '
+                f'than zero with penality criteria ({total}).'))
         if total > 0 > obtained:
-            raise InvalidPoint('Given points cannot be smaller than zero.')
+            raise InvalidPoint(f'Given points ({obtained}) cannot be smaller than zero.')
         if obtained > total > 0:
-            raise InvalidPoint('Given points cannot be greater than available points.')
+            raise InvalidPoint(
+                f'Given points ({obtained}) cannot be greater than available points ({total}).')
         if total == 0:
             raise InvalidPoint('No points given to this criteria.')
 
@@ -46,7 +58,7 @@ class ValidPoints(object):
 
 Pair = All(Any(
     ExactSequence([Any(int, float), int]),
-    All(ExactSequence([Percent, int]), lambda x: [x[0] * x[1] / 100, x[1]])
+    All(ExactSequence([Percent, int]), lambda x: [abs(x[0]) * x[1], x[1]])
 ), ValidPoints())
 
 Section = Schema({

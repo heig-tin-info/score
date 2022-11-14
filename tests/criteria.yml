@@ -7,16 +7,19 @@ criteria:
         $description: The program builds correctly
         $points: [-2, -4]
       unit-testing:
-        foo: 
+        foo:
           $description: Foo function works
-          $points: [3, 3]          
+          $points: [3, 3]
         bar:
           $description: Bar function works
-          $points: [1, 3]        
+          $points: [1, 3]
+        4:
+          $desc: Four
+          $points: [0, 0]
   code:
     implementation:
-      smart-pointer: 
-        $description: Smart pointers are used correcly
+      smart-pointer:
+        $description: Smart pointers are used correctly
         $points: [4, 4]
     overall:
       dry:
@@ -30,7 +33,7 @@ criteria:
         $points: [0, -5]
       indentation:
         $description: Indentation is correct
-        $points: [0, -3]
+        $points: [2, 2]
   bonus:
     test_framework:
       $description: Use a test framework

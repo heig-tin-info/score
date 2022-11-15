@@ -14,7 +14,7 @@ def cli(file=None, verbose=False):
         print((f'Got {score.got:g} points + {score.bonus:g} '
                f'points out of {score.total:g} points'))
 
-    click.secho(f'{score.mark:g}', fg="green" if score.success else "red")
+    click.secho(f'{score.mark:.1f}', fg="green" if score.success else "red")
 
 
 if __name__ == '__main__':

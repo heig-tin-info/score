@@ -1,12 +1,18 @@
 
 import io
 from collections import namedtuple
-
+from math import ceil
 import yaml
 
 from .schema import Criteria
 
 Points = namedtuple('Points', ['got', 'total', 'bonus'])
+
+
+def round_up(n, decimals=0):
+    """ Round up to the nearest integer. """
+    multiplier = 10 ** decimals
+    return ceil(n * multiplier) / multiplier
 
 
 class Score:
@@ -22,7 +28,7 @@ class Score:
     def mark(self):
         if self.total == 0:
             raise ValueError('Total is zero points')
-        return max(1.0, min(6.0, round(5. * self.got / self.total + 1., 1)))
+        return max(1.0, min(6.0, round_up(5. * self.got / self.total + 1., 1)))
 
     @property
     def points(self):

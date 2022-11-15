@@ -48,6 +48,17 @@ class TestScore(TestCase):
             })
             mark = data.mark
 
+    def test_frac(self):
+        data = Score({
+            "criteria": {
+                "test": {
+                    "$description": "Description",
+                    "$points": [970, 1000]
+                }
+            }
+        })
+        self.assertEqual(data.mark, 5.9)
+
     def test_bonus(self):
 
         data = Score({

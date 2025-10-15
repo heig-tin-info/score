@@ -1,9 +1,14 @@
 # Score
 
+[![PyPI version](https://img.shields.io/pypi/v/StudentScore.svg)](https://pypi.org/project/StudentScore/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/StudentScore.svg)](https://pypi.org/project/StudentScore/)
+[![Python](https://img.shields.io/pypi/pyversions/StudentScore)](https://pypi.org/project/StudentScore/)
+![Build and Deploy](https://github.com/heig-tin-info/score/workflows/Build%20and%20Deploy/badge.svg)
+[![codecov](https://codecov.io/gh/heig-tin-info/score/branch/master/graph/badge.svg)](https://codecov.io/gh/heig-tin-info/score)
+[![License](https://img.shields.io/github/license/heig-tin-info/score.svg)](https://github.com/heig-tin-info/score/blob/master/LICENSE.txt)
+[![GitHub repo size](https://img.shields.io/github/repo-size/heig-tin-info/score.svg)](https://github.com/heig-tin-info/score)
 [![GitHub issues](https://img.shields.io/github/issues/heig-tin-info/score.svg)](https://github.com/heig-tin-info/score/issues)
 [![GitHub last commit](https://img.shields.io/github/last-commit/heig-tin-info/score.svg)](https://github.com/heig-tin-info/score/commits/master)
-![Build and Deploy](https://github.com/heig-tin-info/score/workflows/Build%20and%20Deploy/badge.svg)
-![Python](https://img.shields.io/pypi/pyversions/score)
 
 Compute the final score of an assignment based on the `criteria.yml` file.
 

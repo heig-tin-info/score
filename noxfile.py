@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import nox
 
+
 nox.options.sessions = ("lint", "tests", "check-manifest")
 nox.options.reuse_existing_virtualenvs = True
 

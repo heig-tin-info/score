@@ -96,5 +96,3 @@ cython_debug/
 
 a.out
 *.o
-
-StudentScore/version.py

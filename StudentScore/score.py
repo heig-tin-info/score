@@ -1,12 +1,12 @@
-
-import io
 from collections import namedtuple
+import io
 
 import yaml
 
 from .schema import Criteria
 
-Points = namedtuple('Points', ['got', 'total', 'bonus'])
+
+Points = namedtuple("Points", ["got", "total", "bonus"])
 
 
 class Score:
@@ -14,15 +14,15 @@ class Score:
         if isinstance(data, io.TextIOBase):
             data = Criteria(yaml.load(data, Loader=yaml.FullLoader))
         elif isinstance(data, str):
-            with open(data, 'rt', encoding='utf8') as f:
+            with open(data, "rt", encoding="utf8") as f:
                 data = Criteria(yaml.load(f, Loader=yaml.FullLoader))
         self.data = Criteria(data)
 
     @property
     def mark(self):
         if self.total == 0:
-            raise ValueError('Total is zero points')
-        return max(1.0, min(6.0, round(5. * self.got / self.total + 1., 1)))
+            raise ValueError("Total is zero points")
+        return max(1.0, min(6.0, round(5.0 * self.got / self.total + 1.0, 1)))
 
     @property
     def points(self):
@@ -54,11 +54,11 @@ class Score:
                 got += pts.got
                 total += pts.total
                 bonus += pts.bonus
-            elif isinstance(v, list) and k in ['$points', '$pts']:
+            elif isinstance(v, list) and k in ["$points", "$pts"]:
                 _got, _total = v
                 got += float(_got)
                 total += float(_total) if float(_total) > 0 else 0
-            elif isinstance(v, list) and k == '$bonus':
+            elif isinstance(v, list) and k == "$bonus":
                 _got, _total = v
                 bonus += float(_got)
                 got += float(_got)

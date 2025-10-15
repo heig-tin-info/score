@@ -10,10 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - CI: bump `.github/workflows/ci.yml` to use `actions/download-artifact@v4.1.7` for artifact handling.
 - Replaced tox-based automation with `nox` sessions and modernised the CI release pipeline (`noxfile.py`, `.github/workflows/ci.yml`, `pyproject.toml`).
+- Moved packaging configuration to Poetry package mode with dynamic versioning and an `importlib.metadata`-based version helper (`pyproject.toml`, `StudentScore/version.py`).
 
 ### Removed
 
-- Dropped support for Python 3.6 and 3.7 in favour of a Python 3.8+ baseline aligned with the current build tooling (`pyproject.toml`, `.github/workflows/ci.yml`).
+- Dropped support for Python 3.6–3.9 in favour of a Python 3.10+ baseline aligned with the current build tooling (`pyproject.toml`, `.github/workflows/ci.yml`).
 
 ## [0.3.1] - 2022-11-15
 

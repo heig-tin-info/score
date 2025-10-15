@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,18 +28,18 @@ jobs:
           pip install nox
 
       - name: Lint
-        if: matrix.python-version == '3.12'
+        if: matrix.python-version == '3.13'
         run: nox -s lint
 
       - name: Check manifest
-        if: matrix.python-version == '3.12'
+        if: matrix.python-version == '3.13'
         run: nox -s check-manifest
 
       - name: Run tests
         run: nox -s tests
 
       - name: Upload coverage to Codecov
-        if: matrix.python-version == '3.12'
+        if: matrix.python-version == '3.13'
         uses: codecov/codecov-action@v3
 
   release:
@@ -54,12 +54,12 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
       - name: Install build backend
         run: |
           python -m pip install --upgrade pip
-          pip install build setuptools_scm[toml]
+          pip install build
 
       - name: Build distribution
         run: python -m build

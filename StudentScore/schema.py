@@ -18,15 +18,16 @@ class InvalidPoint(Invalid):
     """Invalid points."""
 
 
-re_percent = r'(-?\d+(?:\.\d+)?)\%'
+re_percent = r"(-?\d+(?:\.\d+)?)\%"
 
-Percent = All(str,
-              Match(re_percent),
-              Replace(re_percent, r'\1'),
-              Coerce(float),
-              Range(-100, 100),
-              lambda x: x/100
-              )
+Percent = All(
+    str,
+    Match(re_percent),
+    Replace(re_percent, r"\1"),
+    Coerce(float),
+    Range(-100, 100),
+    lambda x: x / 100,
+)
 
 
 class ValidPoints(object):
@@ -38,41 +39,60 @@ class ValidPoints(object):
         obtained, total = v
 
         if obtained < total < 0:
-            raise InvalidPoint((
-                f'Given points ({obtained}) cannot be smaller '
-                f"than available penalty ({total})."))
+            raise InvalidPoint(
+                (
+                    f"Given points ({obtained}) cannot be smaller "
+                    f"than available penalty ({total})."
+                )
+            )
         if total < 0 < obtained:
-            raise InvalidPoint((
-                f'Given points ({obtained}) cannot be bigger '
-                f'than zero with penalty criteria ({total}).'))
+            raise InvalidPoint(
+                (
+                    f"Given points ({obtained}) cannot be bigger "
+                    f"than zero with penalty criteria ({total})."
+                )
+            )
         if total > 0 > obtained:
             raise InvalidPoint(
-                f'Given points ({obtained}) cannot be smaller than zero.')
+                f"Given points ({obtained}) cannot be smaller than zero."
+            )
         if obtained > total > 0:
             raise InvalidPoint(
-                f'Given points ({obtained}) cannot be greater than available points ({total}).')
+                (
+                    f"Given points ({obtained}) cannot be greater than "
+                    f"available points ({total})."
+                )
+            )
         if total == 0:
-            raise InvalidPoint('No points given to this criteria.')
+            raise InvalidPoint("No points given to this criteria.")
 
         return v
 
 
-Pair = All(Any(
-    ExactSequence([Any(int, float), int]),
-    All(ExactSequence([Percent, int]), lambda x: [abs(x[0]) * x[1], x[1]])
-), ValidPoints())
+Pair = All(
+    Any(
+        ExactSequence([Any(int, float), int]),
+        All(ExactSequence([Percent, int]), lambda x: [abs(x[0]) * x[1], x[1]]),
+    ),
+    ValidPoints(),
+)
 
-DescriptionKey = Any('$description', '$desc')
+DescriptionKey = Any("$description", "$desc")
 
-Section = Schema({
-    Optional(DescriptionKey): str,
-    Coerce(str): Any({
-        Required(Any('$points', '$bonus')): Pair,
-        Required(DescriptionKey): Any(str, [str]),
-        Optional('$rationale'): Any(str, [str]),
-        Optional('$test'): str
-    }, Self)
-})
+Section = Schema(
+    {
+        Optional(DescriptionKey): str,
+        Coerce(str): Any(
+            {
+                Required(Any("$points", "$bonus")): Pair,
+                Required(DescriptionKey): Any(str, [str]),
+                Optional("$rationale"): Any(str, [str]),
+                Optional("$test"): str,
+            },
+            Self,
+        ),
+    }
+)
 
 Criteria = Schema(Section)
 

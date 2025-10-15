@@ -1,18 +1,18 @@
 [build-system]
-requires = ["setuptools>=69", "wheel", "setuptools_scm[toml]>=8.0"]
-build-backend = "setuptools.build_meta"
+requires = ["poetry-core>=1.9.0", "poetry-dynamic-versioning[plugin]>=1.7.0"]
+build-backend = "poetry_dynamic_versioning.backend"
 
-[project]
+[tool.poetry]
 name = "StudentScore"
-dynamic = ["version"]
+version = "0.0.0"
 description = "Computing score of a given student assignment"
 readme = "README.md"
-requires-python = ">=3.8"
-license = { file = "LICENSE.txt" }
-authors = [
-  { name = "Yves Chevallier", email = "yves.chevallier@heig-vd.ch" },
-]
+license = "MIT"
+authors = ["Yves Chevallier <yves.chevallier@heig-vd.ch>"]
 keywords = ["testing", "functional-testing"]
+homepage = "https://github.com/heig-tin-info/score"
+repository = "https://github.com/heig-tin-info/score"
+documentation = "https://heig-tin-info.github.io/score/"
 classifiers = [
   "Intended Audience :: Developers",
   "Intended Audience :: Science/Research",
@@ -21,11 +21,10 @@ classifiers = [
   "Operating System :: POSIX",
   "Development Status :: 3 - Alpha",
   "Programming Language :: Python",
-  "Programming Language :: Python :: 3.8",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "License :: OSI Approved :: MIT License",
   "Environment :: Console",
   "Topic :: Scientific/Engineering",
@@ -33,45 +32,51 @@ classifiers = [
   "Intended Audience :: Education",
   "Operating System :: OS Independent",
 ]
-dependencies = [
-  "voluptuous>=0.12.0",
-  "click>=8.0.0",
-  "pyyaml>=6.0",
-  "colorama>=0.4.0",
-]
+packages = [{ include = "StudentScore" }]
 
-[project.urls]
-Documentation = "https://heig-tin-info.github.io/score/"
-Source = "https://github.com/heig-tin-info/score"
-Tracker = "https://github.com/heig-tin-info/score/issues"
+[tool.poetry.urls]
+"Bug Tracker" = "https://github.com/heig-tin-info/score/issues"
 
-[project.optional-dependencies]
-dev = [
-  "ruff>=0.5.0",
-  "nox>=2024.4.15",
-  "check-manifest>=0.49",
-]
-test = [
-  "pytest>=7.0",
-  "pytest-cov>=4.0",
-  "coverage[toml]>=7.0",
-]
+[tool.poetry.dependencies]
+python = "^3.10"
+voluptuous = ">=0.12.0"
+click = ">=8.0.0"
+pyyaml = ">=6.0"
+colorama = ">=0.4.0"
 
-[project.scripts]
+[tool.poetry.group.test]
+optional = true
+
+[tool.poetry.group.test.dependencies]
+pytest = ">=7.0"
+pytest-cov = ">=4.0"
+coverage = { version = ">=7.11.0", extras = ["toml"] }
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+nox = ">=2024.4.15"
+ruff = ">=0.5.0"
+check-manifest = ">=0.49"
+pytest = "^8.4.2"
+pytest-cov = "^7.0.0"
+coverage = {extras = ["toml"], version = "^7.11.0"}
+
+[tool.poetry.extras]
+test = ["pytest", "pytest-cov", "coverage"]
+dev = ["nox", "ruff", "check-manifest"]
+
+[tool.poetry.scripts]
 score = "StudentScore.__main__:cli"
 
-[tool.setuptools]
-zip-safe = true
-include-package-data = true
-
-[tool.setuptools.packages.find]
-include = ["StudentScore"]
-
-[tool.setuptools_scm]
-write_to = "StudentScore/version.py"
+[tool.poetry-dynamic-versioning]
+enable = true
+style = "pep440"
+format = "{version}"
 
 [tool.pytest.ini_options]
-testpaths = "tests"
+testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 norecursedirs = [".git", "_build"]
@@ -94,9 +99,6 @@ lines-after-imports = 2
 exclude = [".git", "__pycache__", "dist"]
 max-complexity = 10
 max-line-length = 100
-
-[tool.poetry]
-package-mode = false
 
 [tool.check-manifest]
 ignore = ["node_modules/*"]

@@ -9,6 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - CI: bump `.github/workflows/ci.yml` to use `actions/download-artifact@v4.1.7` for artifact handling.
+- Replaced tox-based automation with `nox` sessions and modernised the CI release pipeline (`noxfile.py`, `.github/workflows/ci.yml`, `pyproject.toml`).
+
+### Removed
+
+- Dropped support for Python 3.6 and 3.7 in favour of a Python 3.8+ baseline aligned with the current build tooling (`pyproject.toml`, `.github/workflows/ci.yml`).
 
 ## [0.3.1] - 2022-11-15
 

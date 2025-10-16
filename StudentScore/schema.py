@@ -1,17 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Iterable, List, Sequence, Union
-
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    ValidationError,
-    field_validator,
-    model_validator,
-)
-from pydantic.errors import PydanticCustomError
+from typing import Any, Dict, Iterable, List, Sequence
 
 
 class CriteriaValidationError(ValueError):
@@ -25,260 +15,151 @@ class CriteriaValidationError(ValueError):
 _PERCENT_PATTERN = re.compile(r"^(-?\d+(?:\.\d+)?)%$")
 
 
-def _ensure_text_or_text_list(value: Any) -> Union[str, List[str]]:
+def _add_error(
+    errors: List[Dict[str, Any]],
+    path: Sequence[Any],
+    message: str,
+    *,
+    ctx: Dict[str, Any] | None = None,
+) -> None:
+    error: Dict[str, Any] = {"loc": tuple(path), "msg": message}
+    if ctx:
+        error["ctx"] = ctx
+    errors.append(error)
+
+
+def _ensure_text_or_text_list(
+    value: Any,
+    errors: List[Dict[str, Any]],
+    path: Sequence[Any],
+    *,
+    allow_none: bool = True,
+) -> str | List[str] | None:
+    if value is None and allow_none:
+        return None
     if isinstance(value, str):
         return value
     if isinstance(value, list) and all(isinstance(item, str) for item in value):
         return value
-    raise PydanticCustomError(
-        "value_error", "value must be a string or a list of strings"
-    )
+    _add_error(errors, path, "value must be a string or a list of strings")
+    return None
 
 
-def _validate_pair(value: Any) -> List[Union[int, float]]:
+def _ensure_section_text(
+    value: Any,
+    errors: List[Dict[str, Any]],
+    path: Sequence[Any],
+) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    _add_error(errors, path, "section descriptions must be strings")
+    return None
+
+
+def _validate_pair(
+    value: Any,
+    errors: List[Dict[str, Any]],
+    path: Sequence[Any],
+) -> List[float | int] | None:
     if isinstance(value, tuple):
         value = list(value)
 
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
-        raise PydanticCustomError(
-            "value_error", "points must be provided as a two-item sequence"
+        _add_error(
+            errors,
+            path,
+            "points must be provided as a two-item sequence",
         )
+        return None
     if len(value) != 2:
-        raise PydanticCustomError(
-            "value_error", "points must contain exactly two entries"
-        )
+        _add_error(errors, path, "points must contain exactly two entries")
+        return None
 
     obtained, total = value
 
     try:
         total_value = int(total)
     except (TypeError, ValueError):
-        raise PydanticCustomError(
-            "type_error.integer", "total points must be an integer"
-        )
+        _add_error(errors, path, "total points must be an integer")
+        return None
 
     if isinstance(obtained, str):
         match = _PERCENT_PATTERN.fullmatch(obtained.strip())
         if not match:
-            raise PydanticCustomError(
-                "value_error", "percentage must match the form '42%' or '-10.5%'"
+            _add_error(
+                errors,
+                path,
+                "percentage must match the form '42%' or '-10.5%'",
             )
+            return None
         percent_value = float(match.group(1))
         if not -100 <= percent_value <= 100:
-            raise PydanticCustomError(
-                "value_error", "percentage must be between -100% and 100%"
+            _add_error(
+                errors,
+                path,
+                "percentage must be between -100% and 100%",
             )
+            return None
         obtained_value = abs(percent_value / 100.0) * total_value
     else:
         try:
             obtained_value = float(obtained)
         except (TypeError, ValueError):
-            raise PydanticCustomError(
-                "type_error", "points must be numeric or a percentage string"
+            _add_error(
+                errors,
+                path,
+                "points must be numeric or a percentage string",
             )
+            return None
 
     if total_value == 0:
-        raise PydanticCustomError("value_error", "No points given to this criteria.")
+        _add_error(errors, path, "No points given to this criteria.")
+        return None
     if obtained_value < total_value < 0:
-        raise PydanticCustomError(
-            "value_error",
+        _add_error(
+            errors,
+            path,
             (
                 "Given points ({obtained}) cannot be smaller "
                 "than available penalty ({total})."
             ),
-            {"obtained": obtained_value, "total": total_value},
+            ctx={"obtained": obtained_value, "total": total_value},
         )
+        return None
     if total_value < 0 < obtained_value:
-        raise PydanticCustomError(
-            "value_error",
+        _add_error(
+            errors,
+            path,
             (
                 "Given points ({obtained}) cannot be bigger "
                 "than zero with penalty criteria ({total})."
             ),
-            {"obtained": obtained_value, "total": total_value},
+            ctx={"obtained": obtained_value, "total": total_value},
         )
+        return None
     if total_value > 0 > obtained_value:
-        raise PydanticCustomError(
-            "value_error",
+        _add_error(
+            errors,
+            path,
             "Given points ({obtained}) cannot be smaller than zero.",
-            {"obtained": obtained_value},
+            ctx={"obtained": obtained_value},
         )
+        return None
     if obtained_value > total_value > 0:
-        raise PydanticCustomError(
-            "value_error",
+        _add_error(
+            errors,
+            path,
             (
                 "Given points ({obtained}) cannot be greater than "
                 "available points ({total})."
             ),
-            {"obtained": obtained_value, "total": total_value},
+            ctx={"obtained": obtained_value, "total": total_value},
         )
+        return None
 
     return [float(obtained_value), total_value]
-
-
-class ItemModel(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="forbid")
-
-    description: Union[str, List[str]] | None = Field(default=None, alias="$description")
-    desc: Union[str, List[str]] | None = Field(default=None, alias="$desc")
-    points: List[Union[int, float]] | None = Field(default=None, alias="$points")
-    bonus: List[Union[int, float]] | None = Field(default=None, alias="$bonus")
-    rationale: Union[str, List[str]] | None = Field(default=None, alias="$rationale")
-    test: str | None = Field(default=None, alias="$test")
-
-    @field_validator("description", "desc", "rationale", mode="before")
-    @classmethod
-    def validate_text_block(cls, value: Any) -> Any:
-        if value is None:
-            return value
-        return _ensure_text_or_text_list(value)
-
-    @field_validator("points", "bonus", mode="before")
-    @classmethod
-    def validate_pair(cls, value: Any) -> Any:
-        if value is None:
-            return value
-        return _validate_pair(value)
-
-    @model_validator(mode="after")
-    def ensure_required_fields(self) -> "ItemModel":
-        if self.description is None and self.desc is None:
-            raise PydanticCustomError(
-                "value_error", "either $description or $desc must be provided"
-            )
-        if self.points is None and self.bonus is None:
-            raise PydanticCustomError(
-                "value_error", "either $points or $bonus must be provided"
-            )
-        return self
-
-    def as_dict(self) -> Dict[str, Any]:
-        data: Dict[str, Any] = {}
-        if self.description is not None:
-            data["$description"] = self.description
-        if self.desc is not None:
-            data["$desc"] = self.desc
-        if self.points is not None:
-            data["$points"] = self.points
-        if self.bonus is not None:
-            data["$bonus"] = self.bonus
-        if self.rationale is not None:
-            data["$rationale"] = self.rationale
-        if self.test is not None:
-            data["$test"] = self.test
-        return data
-
-
-class SectionModel(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    description: str | None = Field(default=None, alias="$description")
-    desc: str | None = Field(default=None, alias="$desc")
-    items: Dict[str, Any] = Field(default_factory=dict)
-
-    @model_validator(mode="before")
-    @classmethod
-    def restructure(cls, value: Any) -> Dict[str, Any]:
-        if not isinstance(value, dict):
-            raise PydanticCustomError(
-                "type_error", "section entries must be mappings"
-            )
-
-        items: Dict[str, Any] = {}
-        data: Dict[str, Any] = {}
-        for key, item in value.items():
-            str_key = str(key)
-            if str_key in {"$description", "$desc"}:
-                data[str_key] = item
-            else:
-                items[str_key] = item
-        data["items"] = items
-        return data
-
-    @field_validator("description", "desc", mode="before")
-    @classmethod
-    def ensure_text(cls, value: Any) -> Any:
-        if value is None or isinstance(value, str):
-            return value
-        raise PydanticCustomError(
-            "type_error", "section descriptions must be strings"
-        )
-
-    @field_validator("items", mode="before")
-    @classmethod
-    def ensure_mapping(cls, value: Any) -> Dict[str, Any]:
-        if not isinstance(value, dict):
-            raise PydanticCustomError(
-                "type_error", "section items must be a mapping of criteria"
-            )
-        return value
-
-    @field_validator("items", mode="after")
-    @classmethod
-    def coerce_items(
-        cls, value: Dict[str, Any]
-    ) -> Dict[str, Union["SectionModel", ItemModel]]:
-        coerced: Dict[str, Union[SectionModel, ItemModel]] = {}
-        for key, item in value.items():
-            if isinstance(item, (SectionModel, ItemModel)):
-                coerced[key] = item
-            elif isinstance(item, dict):
-                normalized_keys = {str(sub_key) for sub_key in item.keys()}
-                if any(not key.startswith("$") for key in normalized_keys):
-                    target_model = SectionModel
-                else:
-                    target_model = ItemModel
-
-                try:
-                    coerced[key] = target_model.model_validate(item)
-                except ValidationError as exc:
-                    augmented_errors = []
-                    for error in exc.errors():
-                        loc = (key,)
-                        if "loc" in error:
-                            loc += tuple(error["loc"])
-                        augmented_errors.append({**error, "loc": loc})
-
-                    raise ValidationError.from_exception_data(
-                        target_model.__name__, augmented_errors
-                    ) from exc
-            else:
-                raise PydanticCustomError(
-                    "type_error", "criteria entries must be mappings"
-                )
-        return coerced
-
-    @model_validator(mode="after")
-    def ensure_description_choice(self) -> "SectionModel":
-        if self.description is not None and self.desc is not None:
-            raise PydanticCustomError(
-                "value_error", "use either $description or $desc, not both"
-            )
-        return self
-
-    def as_dict(self) -> Dict[str, Any]:
-        data: Dict[str, Any] = {}
-        if self.description is not None:
-            data["$description"] = self.description
-        if self.desc is not None:
-            data["$desc"] = self.desc
-        for key, value in self.items.items():
-            if isinstance(value, SectionModel):
-                data[key] = value.as_dict()
-            else:
-                data[key] = value.as_dict()
-        return data
-
-
-class CriteriaModel(BaseModel):
-    criteria: SectionModel
-
-    def as_dict(self) -> Dict[str, Any]:
-        return {"criteria": self.criteria.as_dict()}
-
-
-SectionModel.model_rebuild()
-CriteriaModel.model_rebuild()
 
 
 def _format_location(parts: Iterable[Any]) -> str:
@@ -295,19 +176,169 @@ def _format_validation_errors(errors: List[Dict[str, Any]]) -> str:
         if isinstance(message, str) and "{" in message and isinstance(context, dict):
             try:
                 message = message.format(**context)
-            except Exception:
+            except Exception:  # pragma: no cover - defensive
                 pass
         lines.append(f"- {location}: {message}")
     return "\n".join(lines)
 
 
+def _validate_item(
+    value: Dict[Any, Any],
+    errors: List[Dict[str, Any]],
+    path: Sequence[Any],
+) -> Dict[str, Any]:
+    allowed_fields = {
+        "$description",
+        "$desc",
+        "$points",
+        "$bonus",
+        "$rationale",
+        "$test",
+    }
+    result: Dict[str, Any] = {}
+    has_description = False
+    has_desc = False
+    has_points = False
+    has_bonus = False
+
+    for raw_key, raw_value in value.items():
+        key = str(raw_key)
+        if key not in allowed_fields:
+            _add_error(errors, path + (key,), "unrecognized criteria field")
+            continue
+
+        if key in {"$description", "$desc"}:
+            text_value = _ensure_text_or_text_list(
+                raw_value, errors, path + (key,), allow_none=False
+            )
+            if text_value is not None:
+                result[key] = text_value
+                if key == "$description":
+                    has_description = True
+                else:
+                    has_desc = True
+            continue
+
+        if key == "$rationale":
+            text_value = _ensure_text_or_text_list(
+                raw_value, errors, path + (key,), allow_none=True
+            )
+            if text_value is not None:
+                result[key] = text_value
+            continue
+
+        if key in {"$points", "$bonus"}:
+            pair = _validate_pair(raw_value, errors, path + (key,))
+            if pair is not None:
+                result[key] = pair
+                if key == "$points":
+                    has_points = True
+                else:
+                    has_bonus = True
+            continue
+
+        if key == "$test":
+            if not isinstance(raw_value, str):
+                _add_error(errors, path + (key,), "value must be a string")
+            else:
+                result[key] = raw_value
+
+    if has_description and has_desc:
+        _add_error(
+            errors,
+            path,
+            "use either $description or $desc, not both",
+        )
+    if not has_description and not has_desc:
+        _add_error(
+            errors,
+            path,
+            "either $description or $desc must be provided",
+        )
+    if not has_points and not has_bonus:
+        _add_error(
+            errors,
+            path,
+            "either $points or $bonus must be provided",
+        )
+
+    return result
+
+
+def _validate_entry(
+    value: Any,
+    errors: List[Dict[str, Any]],
+    path: Sequence[Any],
+) -> Dict[str, Any]:
+    if not isinstance(value, dict):
+        _add_error(errors, path, "criteria entries must be mappings")
+        return {}
+
+    keys = {str(k) for k in value.keys()}
+    if keys and all(key.startswith("$") for key in keys):
+        return _validate_item(value, errors, path)
+    return _validate_section(value, errors, path)
+
+
+def _validate_section(
+    value: Dict[Any, Any],
+    errors: List[Dict[str, Any]],
+    path: Sequence[Any],
+) -> Dict[str, Any]:
+    if not isinstance(value, dict):
+        _add_error(errors, path, "section entries must be mappings")
+        return {}
+
+    result: Dict[str, Any] = {}
+    has_description = False
+    has_desc = False
+
+    for raw_key, raw_value in value.items():
+        key = str(raw_key)
+        if key in {"$description", "$desc"}:
+            text_value = _ensure_section_text(raw_value, errors, path + (key,))
+            if text_value is not None:
+                result[key] = text_value
+                if key == "$description":
+                    has_description = True
+                else:
+                    has_desc = True
+            continue
+
+        result[key] = _validate_entry(raw_value, errors, path + (key,))
+
+    if has_description and has_desc:
+        _add_error(
+            errors,
+            path,
+            "use either $description or $desc, not both",
+        )
+
+    return result
+
+
 def Criteria(data: Any) -> Dict[str, Any]:
-    try:
-        model = CriteriaModel.model_validate(data)
-    except ValidationError as exc:
-        message = _format_validation_errors(exc.errors())
-        raise CriteriaValidationError(message, errors=exc.errors()) from exc
-    return model.as_dict()
+    errors: List[Dict[str, Any]] = []
+
+    if not isinstance(data, dict):
+        _add_error(errors, (), "criteria definition must be a mapping")
+        normalized: Dict[str, Any] = {}
+    else:
+        normalized = {str(key): value for key, value in data.items()}
+
+    criteria_value = normalized.get("criteria")
+    if criteria_value is None:
+        _add_error(errors, ("criteria",), "missing criteria definition")
+        validated_criteria: Dict[str, Any] = {}
+    else:
+        validated_criteria = _validate_section(criteria_value, errors, ("criteria",))
+
+    if errors:
+        message = _format_validation_errors(errors)
+        raise CriteriaValidationError(message, errors=errors)
+
+    return {"criteria": validated_criteria}
 
 
 __all__ = ["Criteria", "CriteriaValidationError"]
+

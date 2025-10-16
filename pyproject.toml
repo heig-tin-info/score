@@ -64,7 +64,7 @@ pytest-cov = "^7.0.0"
 coverage = {extras = ["toml"], version = "^7.11.0"}
 
 [tool.poetry.extras]
-test = ["pytest", "pytest-cov", "coverage"]
+test = ["pytest", "pytest-cov", "coverage[toml]"]
 dev = ["nox", "ruff", "check-manifest"]
 
 [tool.poetry.scripts]

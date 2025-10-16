@@ -151,10 +151,11 @@ class SectionModel(BaseModel):
         items: Dict[str, Any] = {}
         data: Dict[str, Any] = {}
         for key, item in value.items():
-            if key in {"$description", "$desc"}:
-                data[key] = item
+            str_key = str(key)
+            if str_key in {"$description", "$desc"}:
+                data[str_key] = item
             else:
-                items[str(key)] = item
+                items[str_key] = item
         data["items"] = items
         return data
 
@@ -171,6 +172,25 @@ class SectionModel(BaseModel):
         if not isinstance(value, dict):
             raise TypeError("section items must be a mapping of criteria")
         return value
+
+    @field_validator("items", mode="after")
+    @classmethod
+    def coerce_items(
+        cls, value: Dict[str, Union["SectionModel", ItemModel, Any]]
+    ) -> Dict[str, Union["SectionModel", ItemModel]]:
+        coerced: Dict[str, Union[SectionModel, ItemModel]] = {}
+        for key, item in value.items():
+            if isinstance(item, (SectionModel, ItemModel)):
+                coerced[key] = item
+            elif isinstance(item, dict):
+                normalized_keys = {str(sub_key) for sub_key in item.keys()}
+                if normalized_keys & {"$points", "$bonus"}:
+                    coerced[key] = ItemModel.model_validate(item)
+                else:
+                    coerced[key] = SectionModel.model_validate(item)
+            else:
+                raise TypeError("criteria entries must be mappings")
+        return coerced
 
     @model_validator(mode="after")
     def ensure_description_choice(self) -> "SectionModel":
@@ -197,6 +217,10 @@ class CriteriaModel(BaseModel):
 
     def as_dict(self) -> Dict[str, Any]:
         return {"criteria": self.criteria.as_dict()}
+
+
+SectionModel.model_rebuild()
+CriteriaModel.model_rebuild()
 
 
 def _format_location(parts: Iterable[Any]) -> str:

@@ -140,7 +140,7 @@ class SectionModel(BaseModel):
 
     description: str | None = Field(default=None, alias="$description")
     desc: str | None = Field(default=None, alias="$desc")
-    items: Dict[str, Union["SectionModel", ItemModel]] = Field(default_factory=dict)
+    items: Dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod
@@ -176,7 +176,7 @@ class SectionModel(BaseModel):
     @field_validator("items", mode="after")
     @classmethod
     def coerce_items(
-        cls, value: Dict[str, Union["SectionModel", ItemModel, Any]]
+        cls, value: Dict[str, Any]
     ) -> Dict[str, Union["SectionModel", ItemModel]]:
         coerced: Dict[str, Union[SectionModel, ItemModel]] = {}
         for key, item in value.items():

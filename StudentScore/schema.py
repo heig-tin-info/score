@@ -341,4 +341,3 @@ def Criteria(data: Any) -> Dict[str, Any]:
 
 
 __all__ = ["Criteria", "CriteriaValidationError"]
-

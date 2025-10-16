@@ -115,7 +115,9 @@ class TestCriteria(TestCase):
                     }
                 }
             )
-        self.assertIn("points must be provided as a two-item sequence", str(exc.exception))
+        self.assertIn(
+            "points must be provided as a two-item sequence", str(exc.exception)
+        )
 
     def test_sequence_length_error(self):
         with self.assertRaises(CriteriaValidationError):
@@ -129,11 +131,7 @@ class TestCriteria(TestCase):
 
     def test_tuple_points_are_accepted(self):
         Criteria(
-            {
-                "criteria": {
-                    "test": {"$description": "Description", "$points": (1, 5)}
-                }
-            }
+            {"criteria": {"test": {"$description": "Description", "$points": (1, 5)}}}
         )
 
     def test_percentage_format_error(self):
@@ -161,7 +159,10 @@ class TestCriteria(TestCase):
             Criteria(
                 {
                     "criteria": {
-                        "test": {"$description": "Description", "$points": [object(), 5]}
+                        "test": {
+                            "$description": "Description",
+                            "$points": [object(), 5],
+                        }
                     }
                 }
             )
@@ -208,7 +209,9 @@ class TestCriteria(TestCase):
     def test_item_requires_description_and_points(self):
         with self.assertRaises(CriteriaValidationError) as exc:
             Criteria({"criteria": {"test": {"$points": [1, 5]}}})
-        self.assertIn("either $description or $desc must be provided", str(exc.exception))
+        self.assertIn(
+            "either $description or $desc must be provided", str(exc.exception)
+        )
 
     def test_item_requires_points_or_bonus(self):
         with self.assertRaises(CriteriaValidationError) as exc:

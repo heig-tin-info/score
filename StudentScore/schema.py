@@ -185,9 +185,23 @@ class SectionModel(BaseModel):
             elif isinstance(item, dict):
                 normalized_keys = {str(sub_key) for sub_key in item.keys()}
                 if normalized_keys & {"$points", "$bonus"}:
-                    coerced[key] = ItemModel.model_validate(item)
+                    target_model = ItemModel
                 else:
-                    coerced[key] = SectionModel.model_validate(item)
+                    target_model = SectionModel
+
+                try:
+                    coerced[key] = target_model.model_validate(item)
+                except ValidationError as exc:
+                    augmented_errors = []
+                    for error in exc.errors():
+                        loc = (key,)
+                        if "loc" in error:
+                            loc += tuple(error["loc"])
+                        augmented_errors.append({**error, "loc": loc})
+
+                    raise ValidationError.from_exception_data(  # type: ignore[call-arg]
+                        target_model.__name__, errors=augmented_errors
+                    ) from exc
             else:
                 raise TypeError("criteria entries must be mappings")
         return coerced

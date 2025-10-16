@@ -74,6 +74,8 @@ score = "StudentScore.__main__:cli"
 enable = true
 style = "pep440"
 format = "{base}"
+strict = false
+fallback = "0.0.0"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -73,7 +73,7 @@ score = "StudentScore.__main__:cli"
 [tool.poetry-dynamic-versioning]
 enable = true
 style = "pep440"
-format = "{version}"
+format = "{base}"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

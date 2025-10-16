@@ -30,6 +30,23 @@ class TestCriteria(TestCase):
                 }
             )
 
+    def test_negative_penalty_bounds(self):
+        with self.assertRaises(CriteriaValidationError) as exc:
+            Criteria(
+                {
+                    "criteria": {
+                        "test": {
+                            "$description": "Description",
+                            "$points": [-4, -2],
+                        }
+                    }
+                }
+            )
+        self.assertIn(
+            "cannot be smaller than available penalty",
+            str(exc.exception),
+        )
+
     def test_min(self):
         with self.assertRaises(CriteriaValidationError):
             Criteria(
@@ -41,7 +58,7 @@ class TestCriteria(TestCase):
             )
 
     def test_zero(self):
-        with self.assertRaises(CriteriaValidationError):
+        with self.assertRaises(CriteriaValidationError) as exc:
             Criteria(
                 {
                     "criteria": {
@@ -49,6 +66,9 @@ class TestCriteria(TestCase):
                     }
                 }
             )
+        message = str(exc.exception)
+        self.assertIn("criteria/test/$points", message)
+        self.assertIn("No points given to this criteria.", message)
 
     def test_percent(self):
         Criteria(
@@ -68,6 +88,23 @@ class TestCriteria(TestCase):
                     }
                 }
             )
+
+    def test_negative_obtained_with_positive_total(self):
+        with self.assertRaises(CriteriaValidationError) as exc:
+            Criteria(
+                {
+                    "criteria": {
+                        "test": {
+                            "$description": "Description",
+                            "$points": [-1, 5],
+                        }
+                    }
+                }
+            )
+        self.assertIn(
+            "cannot be smaller than zero",
+            str(exc.exception),
+        )
 
     def test_sequence_type_error(self):
         with self.assertRaises(CriteriaValidationError) as exc:
@@ -119,6 +156,17 @@ class TestCriteria(TestCase):
                 }
             )
 
+    def test_points_must_be_numeric(self):
+        with self.assertRaises(CriteriaValidationError) as exc:
+            Criteria(
+                {
+                    "criteria": {
+                        "test": {"$description": "Description", "$points": [object(), 5]}
+                    }
+                }
+            )
+        self.assertIn("points must be numeric", str(exc.exception))
+
     def test_requires_textual_description(self):
         with self.assertRaises(CriteriaValidationError):
             Criteria(
@@ -126,6 +174,19 @@ class TestCriteria(TestCase):
                     "criteria": {
                         "$description": ["not", "valid"],
                         "test": {"$description": "Description", "$points": [1, 5]},
+                    }
+                }
+            )
+
+    def test_description_list_must_be_text(self):
+        with self.assertRaises(CriteriaValidationError):
+            Criteria(
+                {
+                    "criteria": {
+                        "test": {
+                            "$description": ["Valid", 3],
+                            "$points": [1, 5],
+                        }
                     }
                 }
             )
@@ -153,6 +214,26 @@ class TestCriteria(TestCase):
         with self.assertRaises(CriteriaValidationError) as exc:
             Criteria({"criteria": {"test": {"$description": "Description"}}})
         self.assertIn("either $points or $bonus must be provided", str(exc.exception))
+
+    def test_nested_sections_roundtrip(self):
+        data = Criteria(
+            {
+                "criteria": {
+                    "parent": {
+                        "$description": "Parent",
+                        "child": {
+                            "$desc": "Child",
+                            "$rationale": ["Line one", "Line two"],
+                            "$bonus": [1, 1],
+                        },
+                    }
+                }
+            }
+        )
+        nested = data["criteria"]["parent"]["child"]
+        self.assertEqual(nested["$desc"], "Child")
+        self.assertEqual(nested["$rationale"], ["Line one", "Line two"])
+        self.assertEqual(nested["$bonus"], [1.0, 1])
 
     def test_section_entries_must_be_mappings(self):
         with self.assertRaises(CriteriaValidationError):

@@ -199,8 +199,8 @@ class SectionModel(BaseModel):
                             loc += tuple(error["loc"])
                         augmented_errors.append({**error, "loc": loc})
 
-                    raise ValidationError.from_exception_data(  # type: ignore[call-arg]
-                        target_model.__name__, errors=augmented_errors
+                    raise ValidationError.from_exception_data(
+                        target_model.__name__, augmented_errors
                     ) from exc
             else:
                 raise TypeError("criteria entries must be mappings")

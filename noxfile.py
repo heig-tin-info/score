@@ -15,10 +15,18 @@ PYTEST_DEFAULTS = (
 )
 
 
+TEST_DEPENDENCIES = (
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "coverage[toml]>=7.11.0",
+)
+
+
 @nox.session
 def tests(session: nox.Session) -> None:
     """Run the unit test suite."""
     session.install(".[test]")
+    session.install(*TEST_DEPENDENCIES)
     session.run("pytest", *(session.posargs or PYTEST_DEFAULTS))
 
 

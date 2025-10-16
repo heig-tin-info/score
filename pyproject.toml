@@ -1,10 +1,10 @@
 [build-system]
-requires = ["poetry-core>=1.9.0", "poetry-dynamic-versioning[plugin]>=1.7.0"]
-build-backend = "poetry_dynamic_versioning.backend"
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "StudentScore"
-version = "0.0.0"
+version = "0.3.1"
 description = "Computing score of a given student assignment"
 readme = "README.md"
 license = "MIT"
@@ -70,12 +70,6 @@ dev = ["nox", "ruff", "check-manifest"]
 [tool.poetry.scripts]
 score = "StudentScore.__main__:cli"
 
-[tool.poetry-dynamic-versioning]
-enable = true
-style = "pep440"
-format = "{base}"
-strict = false
-fallback = "0.0.0"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

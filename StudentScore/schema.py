@@ -3,7 +3,15 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Iterable, List, Sequence, Union
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
+from pydantic.errors import PydanticCustomError
 
 
 class CriteriaValidationError(ValueError):
@@ -22,7 +30,9 @@ def _ensure_text_or_text_list(value: Any) -> Union[str, List[str]]:
         return value
     if isinstance(value, list) and all(isinstance(item, str) for item in value):
         return value
-    raise TypeError("value must be a string or a list of strings")
+    raise PydanticCustomError(
+        "value_error", "value must be a string or a list of strings"
+    )
 
 
 def _validate_pair(value: Any) -> List[Union[int, float]]:
@@ -30,57 +40,77 @@ def _validate_pair(value: Any) -> List[Union[int, float]]:
         value = list(value)
 
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
-        raise TypeError("points must be provided as a two-item sequence")
+        raise PydanticCustomError(
+            "value_error", "points must be provided as a two-item sequence"
+        )
     if len(value) != 2:
-        raise ValueError("points must contain exactly two entries")
+        raise PydanticCustomError(
+            "value_error", "points must contain exactly two entries"
+        )
 
     obtained, total = value
 
     try:
         total_value = int(total)
     except (TypeError, ValueError):
-        raise TypeError("total points must be an integer") from None
+        raise PydanticCustomError(
+            "type_error.integer", "total points must be an integer"
+        )
 
     if isinstance(obtained, str):
         match = _PERCENT_PATTERN.fullmatch(obtained.strip())
         if not match:
-            raise ValueError("percentage must match the form '42%' or '-10.5%'")
+            raise PydanticCustomError(
+                "value_error", "percentage must match the form '42%' or '-10.5%'"
+            )
         percent_value = float(match.group(1))
         if not -100 <= percent_value <= 100:
-            raise ValueError("percentage must be between -100% and 100%")
+            raise PydanticCustomError(
+                "value_error", "percentage must be between -100% and 100%"
+            )
         obtained_value = abs(percent_value / 100.0) * total_value
     else:
         try:
             obtained_value = float(obtained)
         except (TypeError, ValueError):
-            raise TypeError("points must be numeric or a percentage string") from None
+            raise PydanticCustomError(
+                "type_error", "points must be numeric or a percentage string"
+            )
 
     if total_value == 0:
-        raise ValueError("No points given to this criteria.")
+        raise PydanticCustomError("value_error", "No points given to this criteria.")
     if obtained_value < total_value < 0:
-        raise ValueError(
+        raise PydanticCustomError(
+            "value_error",
             (
-                f"Given points ({obtained_value}) cannot be smaller "
-                f"than available penalty ({total_value})."
-            )
+                "Given points ({obtained}) cannot be smaller "
+                "than available penalty ({total})."
+            ),
+            {"obtained": obtained_value, "total": total_value},
         )
     if total_value < 0 < obtained_value:
-        raise ValueError(
+        raise PydanticCustomError(
+            "value_error",
             (
-                f"Given points ({obtained_value}) cannot be bigger "
-                f"than zero with penalty criteria ({total_value})."
-            )
+                "Given points ({obtained}) cannot be bigger "
+                "than zero with penalty criteria ({total})."
+            ),
+            {"obtained": obtained_value, "total": total_value},
         )
     if total_value > 0 > obtained_value:
-        raise ValueError(
-            f"Given points ({obtained_value}) cannot be smaller than zero."
+        raise PydanticCustomError(
+            "value_error",
+            "Given points ({obtained}) cannot be smaller than zero.",
+            {"obtained": obtained_value},
         )
     if obtained_value > total_value > 0:
-        raise ValueError(
+        raise PydanticCustomError(
+            "value_error",
             (
-                f"Given points ({obtained_value}) cannot be greater than "
-                f"available points ({total_value})."
-            )
+                "Given points ({obtained}) cannot be greater than "
+                "available points ({total})."
+            ),
+            {"obtained": obtained_value, "total": total_value},
         )
 
     return [float(obtained_value), total_value]
@@ -113,9 +143,13 @@ class ItemModel(BaseModel):
     @model_validator(mode="after")
     def ensure_required_fields(self) -> "ItemModel":
         if self.description is None and self.desc is None:
-            raise ValueError("either $description or $desc must be provided")
+            raise PydanticCustomError(
+                "value_error", "either $description or $desc must be provided"
+            )
         if self.points is None and self.bonus is None:
-            raise ValueError("either $points or $bonus must be provided")
+            raise PydanticCustomError(
+                "value_error", "either $points or $bonus must be provided"
+            )
         return self
 
     def as_dict(self) -> Dict[str, Any]:
@@ -146,7 +180,9 @@ class SectionModel(BaseModel):
     @classmethod
     def restructure(cls, value: Any) -> Dict[str, Any]:
         if not isinstance(value, dict):
-            raise TypeError("section entries must be mappings")
+            raise PydanticCustomError(
+                "type_error", "section entries must be mappings"
+            )
 
         items: Dict[str, Any] = {}
         data: Dict[str, Any] = {}
@@ -164,13 +200,17 @@ class SectionModel(BaseModel):
     def ensure_text(cls, value: Any) -> Any:
         if value is None or isinstance(value, str):
             return value
-        raise TypeError("section descriptions must be strings")
+        raise PydanticCustomError(
+            "type_error", "section descriptions must be strings"
+        )
 
     @field_validator("items", mode="before")
     @classmethod
     def ensure_mapping(cls, value: Any) -> Dict[str, Any]:
         if not isinstance(value, dict):
-            raise TypeError("section items must be a mapping of criteria")
+            raise PydanticCustomError(
+                "type_error", "section items must be a mapping of criteria"
+            )
         return value
 
     @field_validator("items", mode="after")
@@ -184,10 +224,10 @@ class SectionModel(BaseModel):
                 coerced[key] = item
             elif isinstance(item, dict):
                 normalized_keys = {str(sub_key) for sub_key in item.keys()}
-                if normalized_keys & {"$points", "$bonus"}:
-                    target_model = ItemModel
-                else:
+                if any(not key.startswith("$") for key in normalized_keys):
                     target_model = SectionModel
+                else:
+                    target_model = ItemModel
 
                 try:
                     coerced[key] = target_model.model_validate(item)
@@ -203,13 +243,17 @@ class SectionModel(BaseModel):
                         target_model.__name__, augmented_errors
                     ) from exc
             else:
-                raise TypeError("criteria entries must be mappings")
+                raise PydanticCustomError(
+                    "type_error", "criteria entries must be mappings"
+                )
         return coerced
 
     @model_validator(mode="after")
     def ensure_description_choice(self) -> "SectionModel":
         if self.description is not None and self.desc is not None:
-            raise ValueError("use either $description or $desc, not both")
+            raise PydanticCustomError(
+                "value_error", "use either $description or $desc, not both"
+            )
         return self
 
     def as_dict(self) -> Dict[str, Any]:
@@ -247,6 +291,12 @@ def _format_validation_errors(errors: List[Dict[str, Any]]) -> str:
     for error in errors:
         location = _format_location(error.get("loc", ()))
         message = error.get("msg", "unknown validation error")
+        context = error.get("ctx")
+        if isinstance(message, str) and "{" in message and isinstance(context, dict):
+            try:
+                message = message.format(**context)
+            except Exception:
+                pass
         lines.append(f"- {location}: {message}")
     return "\n".join(lines)
 

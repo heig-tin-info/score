@@ -86,6 +86,8 @@ score = "StudentScore.__main__:cli"
 enable = true
 vcs = "git"
 style = "pep440"
+fallback = "0.0.0"
+strict = false
 
 
 [tool.pytest.ini_options]

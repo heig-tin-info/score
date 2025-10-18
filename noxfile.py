@@ -41,4 +41,5 @@ def lint(session: nox.Session) -> None:
 def check_manifest_session(session: nox.Session) -> None:
     """Verify that MANIFEST.in matches the repository contents."""
     session.install("check-manifest>=0.49")
+    session.env["POETRY_DYNAMIC_VERSIONING_BYPASS"] = "1"
     session.run("check-manifest")

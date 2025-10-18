@@ -12,7 +12,7 @@
 
 Compute the final score of an assignment based on the `criteria.yml` file.
 
-This small package is an helper to sum the points of programming assignments. 
+This small package is an helper to sum the points of programming assignments.
 
 ## Usage
 
@@ -22,52 +22,52 @@ Simply use `score` inside an assignment folder
 $ score -v
 Got 7 points + 2 points out of 10 points
 4.5
-$ score 
+$ score
 4.5
+$ score check criteria.yml
+OK, schema version 2
+```
+
+You can use the porcelain command `score json` to get the detailed score report in JSON format:
+
+```console
+$ score json [file]
 ```
 
 ## Criteria file format
 
-Each assignment has a description files that looks like the one below. One can add criteria with positive or negative points. Also bonus point can be set.
+Criteria files now use the version 2 schema which is more explicit and easier to validate. The root object must contain a `schema_version: 2` field and a `criteria` mapping. Each section can provide an optional `description` and nested criteria items. A leaf item uses descriptive keys such as `description`, `awarded_points`, and either `max_points` (regular points) or `bonus_points` (bonus points).
 
 ```yaml
 ---
+schema_version: 2
 criteria:
   testing:
-    tests:
-      build:
-        $description: The program builds correctly
-        $points: [-2, -4]
-      unit-testing:
-        foo: 
-          $description: Foo function works
-          $points: [3, 3]          
-        bar:
-          $description: Bar function works
-          $points: [1, 3]        
+    description: Automated testing
+    build:
+      description: The program builds correctly
+      awarded_points: -2
+      max_points: -4
+    unit:
+      description: Unit test suite covers the critical paths
+      awarded_points: 4
+      max_points: 4
   code:
+    description: Code quality
     implementation:
-      smart-pointer: 
-        $description: Smart pointers are used correcly
-        $points: [4, 4]
-    overall:
-      dry:
-        $description: No repeated code
-        $points: [0, -5]
-      kiss:
-        $description: No unnecessary code
-        $points: [-1, -5]
-      ssot:
-        $description: No redundant information
-        $points: [0, -5]
-      indentation:
-        $description: Indentation is correct
-        $points: [0, -3]
+      description: Smart pointers are used correctly
+      awarded_points: 4
+      max_points: 4
+    duplication:
+      description: No repeated code
+      awarded_points: -1
+      max_points: -5
   bonus:
-    test_framework:
-      $description: Use a test framework
-      $bonus: [2, 2]
+    description: Extra credit
     extension:
-      $description: Program goes beyond the scope of the assignment
-      $bonus: [0, 3]
-```      
+      description: Program goes beyond the scope of the assignment
+      awarded_points: 2
+      bonus_points: 3
+```
+
+Use `score check` to validate a criteria file and `score update` to migrate an older version 1 definition to the version 2 schema.

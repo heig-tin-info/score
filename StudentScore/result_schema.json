@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/heig-tin-info/score/result.schema.json",
+  "title": "Score analysis",
+  "type": "object",
+  "required": [
+    "mark",
+    "success",
+    "points",
+    "criteria"
+  ],
+  "properties": {
+    "mark": {
+      "type": "number",
+      "description": "Final grade on a 1.0 to 6.0 scale."
+    },
+    "success": {
+      "type": "boolean",
+      "description": "Indicates whether the final mark reaches the passing threshold."
+    },
+    "points": {
+      "type": "object",
+      "required": [
+        "got",
+        "total",
+        "bonus"
+      ],
+      "properties": {
+        "got": {
+          "type": "number",
+          "description": "Points obtained, including bonus."
+        },
+        "total": {
+          "type": "number",
+          "description": "Total available non-bonus points."
+        },
+        "bonus": {
+          "type": "number",
+          "description": "Total bonus points obtained."
+        }
+      }
+    },
+    "criteria": {
+      "type": "object",
+      "description": "Normalized criteria data used to compute the score.",
+      "additionalProperties": true
+    }
+  }
+}

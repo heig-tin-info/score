@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 from __future__ import annotations
 
+import importlib.resources as resources
 import json as json_module
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -14,43 +16,6 @@ from .score import Score
 
 DEFAULT_CRITERIA_FILE = Path("criteria.yml")
 DEFAULT_COMMAND_NAME = "__default__"
-RESULT_SCHEMA = {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://github.com/heig-tin-info/score/result.schema.json",
-    "title": "Score analysis",
-    "type": "object",
-    "required": ["mark", "success", "points", "criteria"],
-    "properties": {
-        "mark": {"type": "number", "description": "Final grade on a 1.0 to 6.0 scale."},
-        "success": {
-            "type": "boolean",
-            "description": "Indicates whether the final mark reaches the passing threshold.",
-        },
-        "points": {
-            "type": "object",
-            "required": ["got", "total", "bonus"],
-            "properties": {
-                "got": {
-                    "type": "number",
-                    "description": "Points obtained, including bonus.",
-                },
-                "total": {
-                    "type": "number",
-                    "description": "Total available non-bonus points.",
-                },
-                "bonus": {
-                    "type": "number",
-                    "description": "Total bonus points obtained.",
-                },
-            },
-        },
-        "criteria": {
-            "type": "object",
-            "description": "Normalized criteria data used to compute the score.",
-            "additionalProperties": True,
-        },
-    },
-}
 
 
 class _DefaultCommandGroup(TyperGroup):
@@ -96,6 +61,14 @@ app = typer.Typer(
 def _compute_score(path: Path) -> Score:
     """Instantiate Score with the provided path."""
     return Score(str(path))
+
+
+@lru_cache(maxsize=1)
+def _load_result_schema() -> dict[str, Any]:
+    """Load the JSON schema definition stored in the package."""
+    schema_path = resources.files(__package__) / "result_schema.json"
+    with schema_path.open("r", encoding="utf-8") as schema_file:
+        return json_module.load(schema_file)
 
 
 def _format_payload(score: Score) -> dict[str, Any]:
@@ -183,7 +156,9 @@ def json(
 @app.command()
 def schema() -> None:
     """Display the JSON schema for the analysis payload."""
-    typer.echo(json_module.dumps(RESULT_SCHEMA, indent=2, sort_keys=True))
+    typer.echo(
+        json_module.dumps(_load_result_schema(), indent=2, sort_keys=True)
+    )
 
 
 def cli() -> None:

@@ -30,9 +30,7 @@ class Score:
         normalized_data: Mapping[str, Any]
 
         if hasattr(data, "read"):
-            normalized_data = Criteria(
-                yaml.load(data, Loader=yaml.FullLoader)
-            )
+            normalized_data = Criteria(yaml.load(data, Loader=yaml.FullLoader))
         elif isinstance(data, str):
             with open(data, "rt", encoding="utf8") as file_handle:
                 normalized_data = Criteria(

@@ -1,7 +1,6 @@
+import json
 from pathlib import Path
 from unittest import TestCase
-
-import json
 
 from typer.testing import CliRunner
 

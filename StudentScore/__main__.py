@@ -30,9 +30,18 @@ RESULT_SCHEMA = {
             "type": "object",
             "required": ["got", "total", "bonus"],
             "properties": {
-                "got": {"type": "number", "description": "Points obtained, including bonus."},
-                "total": {"type": "number", "description": "Total available non-bonus points."},
-                "bonus": {"type": "number", "description": "Total bonus points obtained."},
+                "got": {
+                    "type": "number",
+                    "description": "Points obtained, including bonus.",
+                },
+                "total": {
+                    "type": "number",
+                    "description": "Total available non-bonus points.",
+                },
+                "bonus": {
+                    "type": "number",
+                    "description": "Total bonus points obtained.",
+                },
             },
         },
         "criteria": {

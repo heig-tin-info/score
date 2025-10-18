@@ -191,7 +191,8 @@ def _format_validation_errors(errors: List[Dict[str, Any]]) -> str:
 
 
 def _extend_path(path: Sequence[Any], *suffix: Any) -> Tuple[Any, ...]:
-    """Return a tuple that extends the provided path with the given suffix components."""
+    """Return a tuple that extends the provided path with the
+    given suffix components."""
     return tuple(path) + suffix
 
 

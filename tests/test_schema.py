@@ -272,11 +272,7 @@ class TestCriteria(TestCase):
     def test_total_points_must_be_integer(self):
         with self.assertRaises(CriteriaValidationError) as exc:
             Criteria(
-                {
-                    "criteria": {
-                        "test": {"$description": "Desc", "$points": [1, "five"]}
-                    }
-                }
+                {"criteria": {"test": {"$description": "Desc", "$points": [1, "five"]}}}
             )
         self.assertIn("total points must be an integer", str(exc.exception))
 

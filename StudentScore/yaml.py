@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from importlib import import_module
-from typing import Any, IO
+from typing import IO, Any
+
 
 try:
     _yaml = import_module("yaml")

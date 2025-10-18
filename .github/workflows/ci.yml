@@ -57,6 +57,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Ensure tags are available
+        run: |
+          git fetch --force --tags --prune
+          git describe --tags --exact-match "${GITHUB_REF_NAME}"
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"

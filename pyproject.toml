@@ -1,6 +1,6 @@
 [build-system]
-requires = ["poetry-core>=1.9.0", "poetry-dynamic-versioning>=1.3.0"]
-build-backend = "poetry_dynamic_versioning.backend"
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "StudentScore"
@@ -81,14 +81,6 @@ dev = ["nox", "ruff", "check-manifest"]
 
 [tool.poetry.scripts]
 score = "StudentScore.__main__:cli"
-
-[tool.poetry-dynamic-versioning]
-enable = true
-vcs = "git"
-style = "pep440"
-fallback = "0.0.0"
-strict = false
-
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -33,6 +33,17 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 packages = [{ include = "StudentScore" }]
+include = [
+  "CHANGES.md",
+  "conftest.py",
+  "noxfile.py",
+  "poetry.lock",
+  "setup.py",
+  ".coveragerc",
+  ".editorconfig",
+  "tests/**/*",
+  "StudentScore/result_schema.json",
+]
 
 [tool.poetry.urls]
 "Bug Tracker" = "https://github.com/heig-tin-info/score/issues"

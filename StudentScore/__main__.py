@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 from __future__ import annotations
 
+from functools import lru_cache
 import importlib.resources as resources
 import json as json_module
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -156,9 +156,7 @@ def json(
 @app.command()
 def schema() -> None:
     """Display the JSON schema for the analysis payload."""
-    typer.echo(
-        json_module.dumps(_load_result_schema(), indent=2, sort_keys=True)
-    )
+    typer.echo(json_module.dumps(_load_result_schema(), indent=2, sort_keys=True))
 
 
 def cli() -> None:

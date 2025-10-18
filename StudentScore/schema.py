@@ -1,7 +1,9 @@
+"""Validation logic for StudentScore grading criteria definitions."""
+
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Iterable, List, Sequence
+from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 
 class CriteriaValidationError(ValueError):
@@ -22,6 +24,7 @@ def _add_error(
     *,
     ctx: Dict[str, Any] | None = None,
 ) -> None:
+    """Collect a validation error entry with contextual information."""
     error: Dict[str, Any] = {"loc": tuple(path), "msg": message}
     if ctx:
         error["ctx"] = ctx
@@ -35,6 +38,7 @@ def _ensure_text_or_text_list(
     *,
     allow_none: bool = True,
 ) -> str | List[str] | None:
+    """Return text or list of text values, recording validation errors when required."""
     if value is None and allow_none:
         return None
     if isinstance(value, str):
@@ -50,6 +54,7 @@ def _ensure_section_text(
     errors: List[Dict[str, Any]],
     path: Sequence[Any],
 ) -> str | None:
+    """Return a section description when valid, otherwise add a validation error."""
     if value is None:
         return None
     if isinstance(value, str):
@@ -63,6 +68,7 @@ def _validate_pair(
     errors: List[Dict[str, Any]],
     path: Sequence[Any],
 ) -> List[float | int] | None:
+    """Validate a tuple or list of points and return a normalized list when valid."""
     if isinstance(value, tuple):
         value = list(value)
 
@@ -163,11 +169,13 @@ def _validate_pair(
 
 
 def _format_location(parts: Iterable[Any]) -> str:
+    """Return a slash separated string describing where an error occurred."""
     filtered = [str(part) for part in parts if part not in {"items"}]
     return "/".join(filtered) if filtered else "<root>"
 
 
 def _format_validation_errors(errors: List[Dict[str, Any]]) -> str:
+    """Build a human readable message from collected validation errors."""
     lines = ["Invalid criteria definition detected:"]
     for error in errors:
         location = _format_location(error.get("loc", ()))
@@ -176,10 +184,15 @@ def _format_validation_errors(errors: List[Dict[str, Any]]) -> str:
         if isinstance(message, str) and "{" in message and isinstance(context, dict):
             try:
                 message = message.format(**context)
-            except Exception:  # pragma: no cover - defensive
+            except (IndexError, KeyError, ValueError):  # pragma: no cover - defensive
                 pass
         lines.append(f"- {location}: {message}")
     return "\n".join(lines)
+
+
+def _extend_path(path: Sequence[Any], *suffix: Any) -> Tuple[Any, ...]:
+    """Return a tuple that extends the provided path with the given suffix components."""
+    return tuple(path) + suffix
 
 
 def _validate_item(
@@ -187,6 +200,7 @@ def _validate_item(
     errors: List[Dict[str, Any]],
     path: Sequence[Any],
 ) -> Dict[str, Any]:
+    """Validate a criteria item definition and return a normalized mapping."""
     allowed_fields = {
         "$description",
         "$desc",
@@ -204,12 +218,12 @@ def _validate_item(
     for raw_key, raw_value in value.items():
         key = str(raw_key)
         if key not in allowed_fields:
-            _add_error(errors, path + (key,), "unrecognized criteria field")
+            _add_error(errors, _extend_path(path, key), "unrecognized criteria field")
             continue
 
         if key in {"$description", "$desc"}:
             text_value = _ensure_text_or_text_list(
-                raw_value, errors, path + (key,), allow_none=False
+                raw_value, errors, _extend_path(path, key), allow_none=False
             )
             if text_value is not None:
                 result[key] = text_value
@@ -221,14 +235,14 @@ def _validate_item(
 
         if key == "$rationale":
             text_value = _ensure_text_or_text_list(
-                raw_value, errors, path + (key,), allow_none=True
+                raw_value, errors, _extend_path(path, key), allow_none=True
             )
             if text_value is not None:
                 result[key] = text_value
             continue
 
         if key in {"$points", "$bonus"}:
-            pair = _validate_pair(raw_value, errors, path + (key,))
+            pair = _validate_pair(raw_value, errors, _extend_path(path, key))
             if pair is not None:
                 result[key] = pair
                 if key == "$points":
@@ -239,7 +253,7 @@ def _validate_item(
 
         if key == "$test":
             if not isinstance(raw_value, str):
-                _add_error(errors, path + (key,), "value must be a string")
+                _add_error(errors, _extend_path(path, key), "value must be a string")
             else:
                 result[key] = raw_value
 
@@ -270,6 +284,7 @@ def _validate_entry(
     errors: List[Dict[str, Any]],
     path: Sequence[Any],
 ) -> Dict[str, Any]:
+    """Choose between item or section validation based on the provided value."""
     if not isinstance(value, dict):
         _add_error(errors, path, "criteria entries must be mappings")
         return {}
@@ -285,6 +300,7 @@ def _validate_section(
     errors: List[Dict[str, Any]],
     path: Sequence[Any],
 ) -> Dict[str, Any]:
+    """Validate a criteria section definition and normalize all nested entries."""
     if not isinstance(value, dict):
         _add_error(errors, path, "section entries must be mappings")
         return {}
@@ -296,7 +312,9 @@ def _validate_section(
     for raw_key, raw_value in value.items():
         key = str(raw_key)
         if key in {"$description", "$desc"}:
-            text_value = _ensure_section_text(raw_value, errors, path + (key,))
+            text_value = _ensure_section_text(
+                raw_value, errors, _extend_path(path, key)
+            )
             if text_value is not None:
                 result[key] = text_value
                 if key == "$description":
@@ -305,7 +323,7 @@ def _validate_section(
                     has_desc = True
             continue
 
-        result[key] = _validate_entry(raw_value, errors, path + (key,))
+        result[key] = _validate_entry(raw_value, errors, _extend_path(path, key))
 
     if has_description and has_desc:
         _add_error(
@@ -317,7 +335,8 @@ def _validate_section(
     return result
 
 
-def Criteria(data: Any) -> Dict[str, Any]:
+def _criteria(data: Any) -> Dict[str, Any]:
+    """Normalize a criteria definition and raise if the structure is invalid."""
     errors: List[Dict[str, Any]] = []
 
     if not isinstance(data, dict):
@@ -339,5 +358,7 @@ def Criteria(data: Any) -> Dict[str, Any]:
 
     return {"criteria": validated_criteria}
 
+
+Criteria = _criteria
 
 __all__ = ["Criteria", "CriteriaValidationError"]

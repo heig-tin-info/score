@@ -241,3 +241,139 @@ class TestCriteria(TestCase):
     def test_section_entries_must_be_mappings(self):
         with self.assertRaises(CriteriaValidationError):
             Criteria({"criteria": ["not", "a", "mapping"]})
+
+    def test_rationale_allows_none(self):
+        data = Criteria(
+            {
+                "criteria": {
+                    "test": {
+                        "$description": "Description",
+                        "$points": [1, 5],
+                        "$rationale": None,
+                    }
+                }
+            }
+        )
+        self.assertNotIn("$rationale", data["criteria"]["test"])
+
+    def test_section_description_none(self):
+        data = Criteria(
+            {
+                "criteria": {
+                    "section": {
+                        "$description": None,
+                        "test": {"$description": "Desc", "$points": [1, 5]},
+                    }
+                }
+            }
+        )
+        self.assertNotIn("$description", data["criteria"]["section"])
+
+    def test_total_points_must_be_integer(self):
+        with self.assertRaises(CriteriaValidationError) as exc:
+            Criteria(
+                {
+                    "criteria": {
+                        "test": {"$description": "Desc", "$points": [1, "five"]}
+                    }
+                }
+            )
+        self.assertIn("total points must be an integer", str(exc.exception))
+
+    def test_unrecognized_field(self):
+        with self.assertRaises(CriteriaValidationError) as exc:
+            Criteria(
+                {
+                    "criteria": {
+                        "test": {
+                            "$description": "Desc",
+                            "$points": [1, 5],
+                            "$unexpected": "value",
+                        }
+                    }
+                }
+            )
+        self.assertIn("unrecognized criteria field", str(exc.exception))
+
+    def test_test_field_accepts_string(self):
+        data = Criteria(
+            {
+                "criteria": {
+                    "test": {
+                        "$description": "Desc",
+                        "$points": [1, 5],
+                        "$test": "pytest -k something",
+                    }
+                }
+            }
+        )
+        self.assertEqual(
+            data["criteria"]["test"]["$test"],
+            "pytest -k something",
+        )
+
+    def test_test_field_requires_string(self):
+        with self.assertRaises(CriteriaValidationError) as exc:
+            Criteria(
+                {
+                    "criteria": {
+                        "test": {
+                            "$description": "Desc",
+                            "$points": [1, 5],
+                            "$test": ["not", "a", "string"],
+                        }
+                    }
+                }
+            )
+        self.assertIn("value must be a string", str(exc.exception))
+
+    def test_entry_requires_mapping(self):
+        with self.assertRaises(CriteriaValidationError) as exc:
+            Criteria(
+                {
+                    "criteria": {
+                        "test": [
+                            {"$description": "Desc", "$points": [1, 5]},
+                        ]
+                    }
+                }
+            )
+        self.assertIn("criteria entries must be mappings", str(exc.exception))
+
+    def test_section_desc_alias(self):
+        data = Criteria(
+            {
+                "criteria": {
+                    "section": {
+                        "$desc": "Alias",
+                        "test": {"$description": "Desc", "$points": [1, 5]},
+                    }
+                }
+            }
+        )
+        self.assertEqual(data["criteria"]["section"]["$desc"], "Alias")
+
+    def test_section_description_choice_error(self):
+        with self.assertRaises(CriteriaValidationError) as exc:
+            Criteria(
+                {
+                    "criteria": {
+                        "section": {
+                            "$description": "Desc",
+                            "$desc": "Duplicate",
+                            "test": {"$description": "Desc", "$points": [1, 5]},
+                        }
+                    }
+                }
+            )
+        self.assertIn("use either $description or $desc, not both", str(exc.exception))
+
+    def test_root_must_be_mapping(self):
+        with self.assertRaises(CriteriaValidationError) as exc:
+            Criteria(["not", "a", "mapping"])  # type: ignore[arg-type]
+        self.assertIn("criteria definition must be a mapping", str(exc.exception))
+
+    def test_missing_criteria_definition(self):
+        with self.assertRaises(CriteriaValidationError) as exc:
+            Criteria({})
+        self.assertIn("missing criteria definition", str(exc.exception))

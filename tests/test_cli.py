@@ -63,3 +63,21 @@ class TestCli(TestCase):
         schema = json.loads(result.output)
         self.assertEqual(schema["type"], "object")
         self.assertIn("properties", schema)
+
+    def test_update_command(self):
+        runner = CliRunner()
+        source = self.directory.joinpath("criteria.yml")
+
+        with runner.isolated_filesystem():
+            target = Path("criteria.yml")
+            target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+
+            result = runner.invoke(app, ["update", str(target)])
+
+            self.assertEqual(result.exit_code, 0)
+            self.assertIn("schema version 2", result.output)
+
+            content = target.read_text(encoding="utf-8")
+            self.assertIn("schema_version: 2", content)
+            self.assertIn("max_points: -4", content)
+            self.assertIn("awarded_points: -2", content)

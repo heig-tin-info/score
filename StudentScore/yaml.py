@@ -12,6 +12,7 @@ except ModuleNotFoundError as exc:  # pragma: no cover - import side effect
     raise ImportError("PyYAML is required to parse grading criteria files.") from exc
 
 FullLoader = _yaml.FullLoader
+SafeDumper = _yaml.SafeDumper
 
 
 def load(stream: IO[str] | str, *, Loader: Any | None = None) -> Any:
@@ -20,4 +21,16 @@ def load(stream: IO[str] | str, *, Loader: Any | None = None) -> Any:
     return _yaml.load(stream, Loader=loader)
 
 
-__all__ = ["FullLoader", "load"]
+def dump(
+    data: Any,
+    stream: IO[str] | None = None,
+    *,
+    Dumper: Any | None = None,
+    **kwargs: Any,
+) -> str | None:
+    """Proxy to ``yaml.dump`` ensuring the ``SafeDumper`` is used by default."""
+    dumper = Dumper or SafeDumper
+    return _yaml.dump(data, stream=stream, Dumper=dumper, **kwargs)
+
+
+__all__ = ["FullLoader", "SafeDumper", "dump", "load"]

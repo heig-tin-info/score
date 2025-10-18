@@ -55,3 +55,29 @@ class TestScore(TestCase):
         self.assertEqual(data.points.total, 2)
         self.assertEqual(data.points.bonus, 2)
         self.assertTrue(data.success)
+
+    def test_score_v2_format(self):
+        data = Score(
+            {
+                "schema_version": 2,
+                "criteria": {
+                    "group": {
+                        "description": "Group description",
+                        "item": {
+                            "description": "Item description",
+                            "max_points": 4,
+                            "awarded_points": 4,
+                        },
+                        "bonus": {
+                            "description": "Bonus description",
+                            "bonus_points": 2,
+                            "awarded_points": 1,
+                        },
+                    }
+                },
+            }
+        )
+        self.assertEqual(data.mark, 6.0)
+        self.assertEqual(data.points.got, 5)
+        self.assertEqual(data.points.total, 4)
+        self.assertEqual(data.points.bonus, 1)

@@ -373,3 +373,111 @@ class TestCriteria(TestCase):
         with self.assertRaises(CriteriaValidationError) as exc:
             Criteria({})
         self.assertIn("missing criteria definition", str(exc.exception))
+
+    def test_v2_valid_definition(self):
+        data = Criteria(
+            {
+                "schema_version": 2,
+                "criteria": {
+                    "group": {
+                        "description": "Group description",
+                        "item": {
+                            "description": "Item description",
+                            "max_points": 5,
+                            "awarded_points": 3,
+                            "rationale": "A reason",
+                            "prompt": "Run an LLM check",
+                        },
+                        "bonus": {
+                            "description": "Bonus description",
+                            "bonus_points": 2,
+                            "awarded_points": 1,
+                        },
+                    }
+                },
+            }
+        )
+        self.assertEqual(data["schema_version"], 2)
+        item = data["criteria"]["group"]["item"]
+        bonus = data["criteria"]["group"]["bonus"]
+        self.assertEqual(item["$description"], "Item description")
+        self.assertEqual(item["$points"], [3.0, 5])
+        self.assertEqual(item["$rationale"], "A reason")
+        self.assertEqual(item["$test"], "Run an LLM check")
+        self.assertEqual(bonus["$bonus"], [1.0, 2])
+
+    def test_v2_missing_awarded_points(self):
+        with self.assertRaises(CriteriaValidationError) as exc:
+            Criteria(
+                {
+                    "schema_version": 2,
+                    "criteria": {
+                        "group": {
+                            "description": "Group",
+                            "item": {
+                                "description": "Item",
+                                "max_points": 5,
+                            },
+                        }
+                    },
+                }
+            )
+        self.assertIn("awarded_points must be provided", str(exc.exception))
+
+    def test_v2_requires_points_type(self):
+        with self.assertRaises(CriteriaValidationError) as exc:
+            Criteria(
+                {
+                    "schema_version": 2,
+                    "criteria": {
+                        "group": {
+                            "description": "Group",
+                            "item": {
+                                "description": "Item",
+                                "awarded_points": 2,
+                            },
+                        }
+                    },
+                }
+            )
+        self.assertIn(
+            "either max_points or bonus_points must be provided", str(exc.exception)
+        )
+
+    def test_v2_rejects_both_points_definitions(self):
+        with self.assertRaises(CriteriaValidationError) as exc:
+            Criteria(
+                {
+                    "schema_version": 2,
+                    "criteria": {
+                        "group": {
+                            "description": "Group",
+                            "item": {
+                                "description": "Item",
+                                "awarded_points": 2,
+                                "max_points": 5,
+                                "bonus_points": 1,
+                            },
+                        }
+                    },
+                }
+            )
+        self.assertIn("use either max_points or bonus_points", str(exc.exception))
+
+    def test_v2_requires_description(self):
+        with self.assertRaises(CriteriaValidationError) as exc:
+            Criteria(
+                {
+                    "schema_version": 2,
+                    "criteria": {
+                        "group": {
+                            "description": "Group",
+                            "item": {
+                                "awarded_points": 2,
+                                "max_points": 5,
+                            },
+                        }
+                    },
+                }
+            )
+        self.assertIn("description must be provided", str(exc.exception))

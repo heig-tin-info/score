@@ -15,6 +15,7 @@ class CriteriaValidationError(ValueError):
 
 
 _PERCENT_PATTERN = re.compile(r"^(-?\d+(?:\.\d+)?)%$")
+_MISSING = object()
 
 
 def _add_error(
@@ -336,6 +337,162 @@ def _validate_section(
     return result
 
 
+def _validate_v2_entry(
+    value: Any,
+    errors: List[Dict[str, Any]],
+    path: Sequence[Any],
+) -> Dict[str, Any]:
+    """Dispatch version 2 entries to either section or item validators."""
+    if not isinstance(value, dict):
+        _add_error(errors, path, "criteria entries must be mappings")
+        return {}
+
+    keys = {str(k) for k in value.keys()}
+    if {"awarded_points", "max_points", "bonus_points"} & keys:
+        return _validate_v2_item(value, errors, path)
+    return _validate_v2_section(value, errors, path)
+
+
+def _validate_v2_section(
+    value: Dict[Any, Any],
+    errors: List[Dict[str, Any]],
+    path: Sequence[Any],
+) -> Dict[str, Any]:
+    """Validate a version 2 section definition."""
+    if not isinstance(value, dict):
+        _add_error(errors, path, "section entries must be mappings")
+        return {}
+
+    result: Dict[str, Any] = {}
+    description_value = value.get("description")
+    if description_value is not None:
+        text_value = _ensure_section_text(
+            description_value, errors, _extend_path(path, "description")
+        )
+        if text_value is not None:
+            result["$description"] = text_value
+
+    for raw_key, raw_value in value.items():
+        key = str(raw_key)
+        if key == "description":
+            continue
+        result[key] = _validate_v2_entry(raw_value, errors, _extend_path(path, key))
+
+    return result
+
+
+def _validate_v2_item(
+    value: Dict[Any, Any],
+    errors: List[Dict[str, Any]],
+    path: Sequence[Any],
+) -> Dict[str, Any]:
+    """Validate a version 2 item definition and normalize it."""
+    allowed_fields = {
+        "description",
+        "max_points",
+        "bonus_points",
+        "awarded_points",
+        "rationale",
+        "prompt",
+    }
+    result: Dict[str, Any] = {}
+    has_description = False
+    awarded_points: Any = _MISSING
+    max_points: Any = _MISSING
+    bonus_points: Any = _MISSING
+
+    for raw_key, raw_value in value.items():
+        key = str(raw_key)
+        if key not in allowed_fields:
+            _add_error(errors, _extend_path(path, key), "unrecognized criteria field")
+            continue
+
+        if key == "description":
+            text_value = _ensure_text_or_text_list(
+                raw_value, errors, _extend_path(path, key), allow_none=False
+            )
+            if text_value is not None:
+                result["$description"] = text_value
+                has_description = True
+            continue
+
+        if key == "rationale":
+            text_value = _ensure_text_or_text_list(
+                raw_value, errors, _extend_path(path, key), allow_none=True
+            )
+            if text_value is not None:
+                result["$rationale"] = text_value
+            continue
+
+        if key == "prompt":
+            if not isinstance(raw_value, str):
+                _add_error(errors, _extend_path(path, key), "value must be a string")
+            else:
+                result["$test"] = raw_value
+            continue
+
+        if key == "awarded_points":
+            awarded_points = raw_value
+            continue
+
+        if key == "max_points":
+            max_points = raw_value
+            continue
+
+        if key == "bonus_points":
+            bonus_points = raw_value
+            continue
+
+    if not has_description:
+        _add_error(
+            errors,
+            path,
+            "description must be provided for each criterion",
+        )
+
+    if awarded_points is _MISSING:
+        _add_error(
+            errors,
+            _extend_path(path, "awarded_points"),
+            "awarded_points must be provided",
+        )
+
+    if max_points is not _MISSING and bonus_points is not _MISSING:
+        _add_error(
+            errors,
+            path,
+            "use either max_points or bonus_points, not both",
+        )
+
+    pair: List[float | int] | None = None
+    if max_points is not _MISSING:
+        if awarded_points is not _MISSING:
+            pair = _validate_pair(
+                [awarded_points, max_points],
+                errors,
+                _extend_path(path, "max_points"),
+            )
+            if pair is not None:
+                result["$points"] = pair
+    elif bonus_points is not _MISSING:
+        if awarded_points is not _MISSING:
+            pair = _validate_pair(
+                [awarded_points, bonus_points],
+                errors,
+                _extend_path(path, "bonus_points"),
+            )
+            if pair is not None:
+                result["$bonus"] = pair
+    else:
+        _add_error(
+            errors,
+            path,
+            "either max_points or bonus_points must be provided",
+        )
+
+    return result
+
+
 def _criteria(data: Any) -> Dict[str, Any]:
     """Normalize a criteria definition and raise if the structure is invalid."""
     errors: List[Dict[str, Any]] = []
@@ -346,10 +503,30 @@ def _criteria(data: Any) -> Dict[str, Any]:
     else:
         normalized = {str(key): value for key, value in data.items()}
 
+    schema_version = 1
+    if "schema_version" in normalized:
+        try:
+            schema_version = int(normalized["schema_version"])
+        except (TypeError, ValueError):
+            _add_error(
+                errors,
+                ("schema_version",),
+                "schema_version must be an integer",
+            )
+        else:
+            if schema_version not in {1, 2}:
+                _add_error(
+                    errors,
+                    ("schema_version",),
+                    "schema_version must be either 1 or 2",
+                )
+
     criteria_value = normalized.get("criteria")
     if criteria_value is None:
         _add_error(errors, ("criteria",), "missing criteria definition")
         validated_criteria: Dict[str, Any] = {}
+    elif schema_version == 2:
+        validated_criteria = _validate_v2_section(criteria_value, errors, ("criteria",))
     else:
         validated_criteria = _validate_section(criteria_value, errors, ("criteria",))
 
@@ -357,7 +534,11 @@ def _criteria(data: Any) -> Dict[str, Any]:
         message = _format_validation_errors(errors)
         raise CriteriaValidationError(message, errors=errors)
 
-    return {"criteria": validated_criteria}
+    result = {"criteria": validated_criteria}
+    if "schema_version" in normalized or schema_version == 2:
+        result["schema_version"] = schema_version
+
+    return result
 
 
 Criteria = _criteria

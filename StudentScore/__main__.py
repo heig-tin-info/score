@@ -13,7 +13,9 @@ import typer
 from typer.main import TyperGroup
 
 from . import yaml
+from .apply import apply_results
 from .conversion import upgrade_to_v2
+from .grading import build_prompt
 from .schema import Criteria, CriteriaValidationError
 from .score import Score
 
@@ -29,12 +31,22 @@ class _DefaultCommandGroup(TyperGroup):
     default_command_name: str | None = None
 
     def invoke(self, ctx: typer.Context) -> Any:
+        protected_args = None
+        if hasattr(ctx, "protected_args"):
+            protected_args = ctx.protected_args
+        elif hasattr(ctx, "_protected_args"):
+            protected_args = ctx._protected_args
+
         if (
             self.default_command_name
-            and not ctx._protected_args
+            and protected_args is not None
+            and not protected_args
             and not ctx.resilient_parsing
         ):
-            ctx._protected_args = [self.default_command_name]
+            if hasattr(ctx, "protected_args"):
+                ctx.protected_args = [self.default_command_name]
+            else:
+                ctx._protected_args = [self.default_command_name]
         return super().invoke(ctx)
 
     def resolve_command(  # type: ignore[override]
@@ -224,6 +236,144 @@ def check(
 
     schema_version = int(normalized.get("schema_version", 1))
     typer.secho(f"OK, schema version {schema_version}", fg="green")
+
+
+@app.command()
+def apply(
+    results: Path = typer.Argument(
+        ...,
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+        help="JSON results file: {criterion.id: {awarded_points, rationale}}.",
+    ),
+    file: Path = typer.Argument(
+        DEFAULT_CRITERIA_FILE,
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+        help="Path to the criteria file to update.",
+    ),
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        dir_okay=False,
+        writable=True,
+        resolve_path=True,
+        help="Destination file. Defaults to updating the criteria file in place.",
+    ),
+) -> None:
+    """Merge awarded points/rationale from a results file into the criteria."""
+    with results.open("r", encoding="utf-8") as handle:
+        payload = json_module.load(handle)
+    if not isinstance(payload, dict):
+        typer.secho("Results file must be a JSON object.", fg="red", err=True)
+        raise typer.Exit(code=1)
+
+    with file.open("r", encoding="utf-8") as handle:
+        raw_criteria = yaml.load(handle, Loader=yaml.FullLoader)
+
+    updated, applied, unknown = apply_results(raw_criteria, payload)
+
+    # Fail fast on a typo/mismatch rather than silently dropping a grade.
+    for cid in unknown:
+        typer.secho(f"Unknown criterion in results: {cid}", fg="red", err=True)
+    if unknown:
+        raise typer.Exit(code=1)
+
+    # Validate the merged result before persisting it.
+    Criteria(updated)
+
+    destination = output or file
+    with destination.open("w", encoding="utf-8") as handle:
+        yaml.dump(
+            updated,
+            stream=handle,
+            sort_keys=False,
+            allow_unicode=True,
+            default_flow_style=False,
+        )
+    typer.secho(
+        f"Applied {len(applied)} criteria to {destination}", fg="green"
+    )
+
+
+@app.command()
+def grade(
+    file: Path = typer.Argument(
+        DEFAULT_CRITERIA_FILE,
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+        help="Path to the criteria file.",
+    ),
+    use_llm: bool = typer.Option(
+        False,
+        "--llm",
+        help="Call Claude to grade the submission (needs ANTHROPIC_API_KEY).",
+    ),
+    source: list[str] = typer.Option(
+        [],
+        "--source",
+        "-s",
+        help="Glob of source files to send to the model (repeatable).",
+    ),
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        dir_okay=False,
+        writable=True,
+        resolve_path=True,
+        help="With --llm: write the graded criteria file here.",
+    ),
+    model: str | None = typer.Option(
+        None,
+        "--model",
+        help="Override the grading model (default: claude-opus-4-8).",
+    ),
+) -> None:
+    """Assemble the grading prompt, or grade with Claude when --llm is set."""
+    with file.open("r", encoding="utf-8") as handle:
+        raw_criteria = yaml.load(handle, Loader=yaml.FullLoader)
+    normalized = Criteria(raw_criteria)
+
+    if not use_llm:
+        typer.echo(build_prompt(normalized))
+        return
+
+    from .llm import DEFAULT_MODEL, collect_sources, grade_with_llm
+
+    patterns = list(source)
+    grading = normalized.get("grading") or {}
+    patterns.extend(grading.get("sources", []))
+    sources = collect_sources(patterns) if patterns else {}
+
+    results = grade_with_llm(
+        normalized, sources, model=model or DEFAULT_MODEL
+    )
+
+    updated, applied, _ = apply_results(raw_criteria, results)
+    Criteria(updated)
+
+    destination = output or file
+    with destination.open("w", encoding="utf-8") as handle:
+        yaml.dump(
+            updated,
+            stream=handle,
+            sort_keys=False,
+            allow_unicode=True,
+            default_flow_style=False,
+        )
+    typer.secho(
+        f"Graded {len(applied)} criteria with {model or DEFAULT_MODEL} "
+        f"-> {destination}",
+        fg="green",
+    )
 
 
 @app.command()

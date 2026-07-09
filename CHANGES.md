@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Schema version 2 now accepts an optional top-level `grading` block carrying an
+  LLM correction `context` and a structured `student` profile (`level`, `knows`,
+  `learning`) to guide assisted grading (`StudentScore/schema.py`).
+- New `score grade` command that assembles an LLM grading prompt from the
+  `grading` block and each criterion's `prompt` instructions, without calling any
+  LLM (`StudentScore/grading.py`, `StudentScore/__main__.py`).
+- `grading.sources` field (list of file globs) telling the LLM tier which files
+  to attach to the grading prompt (`StudentScore/schema.py`).
+- New `score apply` command that merges a `{criterion.id: {awarded_points,
+  rationale}}` results file into a criteria file, clamping out-of-range points;
+  the single ingestion path for both the objective and LLM grading tiers
+  (`StudentScore/apply.py`, `StudentScore/__main__.py`).
+- `score grade --llm` grades a submission with Claude (Opus 4.8, strict JSON
+  output) using the optional `anthropic` extra — `pip install StudentScore[llm]`
+  (`StudentScore/llm.py`).
+- `score-grade` composite GitHub Action computing the objective mark (build +
+  tests) and publishing it as a heig-classroom `GRADE` annotation
+  (`.github/actions/score-grade/`).
+
 ### Changed
 
 - CI: bump `.github/workflows/ci.yml` to use `actions/download-artifact@v4.1.7` for artifact handling.

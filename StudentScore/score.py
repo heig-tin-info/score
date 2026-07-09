@@ -77,7 +77,7 @@ class Score:
         """Recursively aggregate points stored in a criteria mapping."""
         accumulator = _Accumulator()
         for key, value in data.items():
-            if key == "schema_version":
+            if key in {"schema_version", "grading"}:
                 continue
             if isinstance(value, MutableMapping):
                 nested_points = self._get_points(value)

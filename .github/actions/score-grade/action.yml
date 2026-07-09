@@ -1,0 +1,94 @@
+name: "Score — objective grading"
+description: >
+  Build a student submission, run its tests, compute the objective mark with
+  StudentScore, and publish it as a single GRADE annotation for heig-classroom.
+author: "heig-tin-info"
+
+inputs:
+  criteria-file:
+    description: "Path to the criteria file."
+    default: "criteria.yml"
+  build-command:
+    description: "Command that builds the submission (non-zero exit = build error)."
+    default: "make"
+  test-command:
+    description: "Command that runs the tests and writes JUnit XML to report.xml."
+    default: "pytest --junitxml=report.xml"
+  tests-criterion:
+    description: "Dotted id of the all-tests-passed criterion."
+    default: "binary.all-tests-passed"
+  build-errors-criterion:
+    description: "Dotted id of the no-build-errors criterion (blank to skip)."
+    default: ""
+  score-spec:
+    description: "pip requirement used to install StudentScore."
+    default: "StudentScore"
+  python-version:
+    description: "Python version to set up."
+    default: "3.12"
+  scale:
+    description: "Denominator for the GRADE annotation (max of the scale)."
+    default: "6"
+  emit-annotation:
+    description: "Emit the ::notice title=GRADE annotation (true/false)."
+    default: "true"
+
+outputs:
+  mark:
+    description: "The computed mark on the 1..scale range."
+    value: ${{ steps.compute.outputs.mark }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install StudentScore
+      shell: bash
+      run: python -m pip install --upgrade pip "${{ inputs.score-spec }}"
+
+    - name: Build
+      id: build
+      shell: bash
+      continue-on-error: true
+      run: ${{ inputs.build-command }}
+
+    - name: Test
+      id: test
+      if: steps.build.outcome == 'success'
+      shell: bash
+      continue-on-error: true
+      run: ${{ inputs.test-command }}
+
+    - name: Compute objective results and mark
+      id: compute
+      if: always()
+      shell: bash
+      env:
+        BUILD_OUTCOME: ${{ steps.build.outcome }}
+        TESTS_CRITERION: ${{ inputs.tests-criterion }}
+        BUILD_ERRORS_CRITERION: ${{ inputs.build-errors-criterion }}
+        CRITERIA_FILE: ${{ inputs.criteria-file }}
+      run: |
+        python "${{ github.action_path }}/objective.py" > results.json
+        cat results.json
+        score apply results.json "${CRITERIA_FILE}" -o graded.yml
+        MARK=$(score json graded.yml | python -c "import sys,json;print(f\"{json.load(sys.stdin)['mark']:g}\")")
+        echo "mark=${MARK}" >> "$GITHUB_OUTPUT"
+
+    - name: Upload graded criteria
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: graded-criteria
+        path: graded.yml
+        if-no-files-found: warn
+
+    - name: Publish grade
+      if: always() && inputs.emit-annotation == 'true'
+      shell: bash
+      run: |
+        echo "::notice title=GRADE::${{ steps.compute.outputs.mark || '1' }}/${{ inputs.scale }}"

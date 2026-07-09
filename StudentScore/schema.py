@@ -493,6 +493,93 @@ def _validate_v2_item(
     return result
 
 
+def _validate_student(
+    value: Any,
+    errors: List[Dict[str, Any]],
+    path: Sequence[Any],
+) -> Dict[str, Any] | None:
+    """Validate the structured student profile used for LLM-assisted grading."""
+    if not isinstance(value, dict):
+        _add_error(errors, path, "student must be a mapping")
+        return None
+
+    allowed_fields = {"level", "knows", "learning"}
+    result: Dict[str, Any] = {}
+    for raw_key, raw_value in value.items():
+        key = str(raw_key)
+        if key not in allowed_fields:
+            _add_error(errors, _extend_path(path, key), "unrecognized student field")
+            continue
+
+        if key == "level":
+            if not isinstance(raw_value, str):
+                _add_error(errors, _extend_path(path, key), "level must be a string")
+            else:
+                result[key] = raw_value
+            continue
+
+        # "knows" and "learning" are lists of short strings.
+        if isinstance(raw_value, list) and all(
+            isinstance(item, str) for item in raw_value
+        ):
+            result[key] = raw_value
+        else:
+            _add_error(
+                errors,
+                _extend_path(path, key),
+                f"{key} must be a list of strings",
+            )
+
+    return result
+
+
+def _validate_grading(
+    value: Any,
+    errors: List[Dict[str, Any]],
+    path: Sequence[Any],
+) -> Dict[str, Any]:
+    """Validate the top-level ``grading`` block guiding LLM-assisted grading."""
+    if not isinstance(value, dict):
+        _add_error(errors, path, "grading must be a mapping")
+        return {}
+
+    allowed_fields = {"context", "student", "sources"}
+    result: Dict[str, Any] = {}
+    for raw_key, raw_value in value.items():
+        key = str(raw_key)
+        if key not in allowed_fields:
+            _add_error(errors, _extend_path(path, key), "unrecognized grading field")
+            continue
+
+        if key == "context":
+            text_value = _ensure_text_or_text_list(
+                raw_value, errors, _extend_path(path, key), allow_none=False
+            )
+            if text_value is not None:
+                result[key] = text_value
+            continue
+
+        if key == "sources":
+            if isinstance(raw_value, list) and all(
+                isinstance(item, str) for item in raw_value
+            ):
+                result[key] = raw_value
+            else:
+                _add_error(
+                    errors,
+                    _extend_path(path, key),
+                    "sources must be a list of file globs (strings)",
+                )
+            continue
+
+        if key == "student":
+            student = _validate_student(raw_value, errors, _extend_path(path, key))
+            if student is not None:
+                result[key] = student
+
+    return result
+
+
 def _criteria(data: Any) -> Dict[str, Any]:
     """Normalize a criteria definition and raise if the structure is invalid."""
     errors: List[Dict[str, Any]] = []
@@ -530,6 +617,18 @@ def _criteria(data: Any) -> Dict[str, Any]:
     else:
         validated_criteria = _validate_section(criteria_value, errors, ("criteria",))
 
+    grading_value = normalized.get("grading")
+    validated_grading: Dict[str, Any] | None = None
+    if grading_value is not None:
+        if schema_version != 2:
+            _add_error(
+                errors,
+                ("grading",),
+                "grading requires schema_version 2",
+            )
+        else:
+            validated_grading = _validate_grading(grading_value, errors, ("grading",))
+
     if errors:
         message = _format_validation_errors(errors)
         raise CriteriaValidationError(message, errors=errors)
@@ -537,6 +636,8 @@ def _criteria(data: Any) -> Dict[str, Any]:
     result = {"criteria": validated_criteria}
     if "schema_version" in normalized or schema_version == 2:
         result["schema_version"] = schema_version
+    if validated_grading is not None:
+        result["grading"] = validated_grading
 
     return result
 

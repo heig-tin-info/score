@@ -481,3 +481,63 @@ class TestCriteria(TestCase):
                 }
             )
         self.assertIn("description must be provided", str(exc.exception))
+
+    def _v2_with_grading(self, grading):
+        return {
+            "schema_version": 2,
+            "grading": grading,
+            "criteria": {
+                "group": {
+                    "description": "Group",
+                    "item": {
+                        "description": "Item",
+                        "awarded_points": 0,
+                        "max_points": 1,
+                    },
+                }
+            },
+        }
+
+    def test_v2_grading_valid(self):
+        data = Criteria(
+            self._v2_with_grading(
+                {
+                    "context": "Be fair",
+                    "student": {
+                        "level": "Year 1",
+                        "knows": ["loops"],
+                        "learning": ["pointers"],
+                    },
+                }
+            )
+        )
+        grading = data["grading"]
+        self.assertEqual(grading["context"], "Be fair")
+        self.assertEqual(grading["student"]["level"], "Year 1")
+        self.assertEqual(grading["student"]["knows"], ["loops"])
+        self.assertEqual(grading["student"]["learning"], ["pointers"])
+
+    def test_v2_grading_rejects_unknown_field(self):
+        with self.assertRaises(CriteriaValidationError) as exc:
+            Criteria(self._v2_with_grading({"context": "hi", "foo": "bar"}))
+        self.assertIn("unrecognized grading field", str(exc.exception))
+
+    def test_v2_grading_student_knows_must_be_list(self):
+        with self.assertRaises(CriteriaValidationError) as exc:
+            Criteria(self._v2_with_grading({"student": {"knows": "nope"}}))
+        self.assertIn("knows must be a list of strings", str(exc.exception))
+
+    def test_grading_requires_v2(self):
+        with self.assertRaises(CriteriaValidationError) as exc:
+            Criteria(
+                {
+                    "grading": {"context": "hi"},
+                    "criteria": {
+                        "group": {
+                            "$description": "Group",
+                            "item": {"$description": "Item", "$points": [0, 1]},
+                        }
+                    },
+                }
+            )
+        self.assertIn("grading requires schema_version 2", str(exc.exception))

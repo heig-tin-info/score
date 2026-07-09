@@ -4,7 +4,39 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0] - 2026-07-10
+
+### Added
+
+- Schema version 2 now accepts an optional top-level `grading` block carrying an
+  LLM correction `context` and a structured `student` profile (`level`, `knows`,
+  `learning`) to guide assisted grading (`StudentScore/schema.py`).
+- New `score grade` command that assembles an LLM grading prompt from the
+  `grading` block and each criterion's `prompt` instructions, without calling any
+  LLM (`StudentScore/grading.py`, `StudentScore/__main__.py`).
+- `grading.sources` field (list of file globs) telling the LLM tier which files
+  to attach to the grading prompt (`StudentScore/schema.py`).
+- New `score apply` command that merges a `{criterion.id: {awarded_points,
+  rationale}}` results file into a criteria file, clamping out-of-range points;
+  the single ingestion path for both the objective and LLM grading tiers
+  (`StudentScore/apply.py`, `StudentScore/__main__.py`).
+- `score grade --llm` grades a submission with Claude (Opus 4.8, strict JSON
+  output) using the optional `anthropic` extra — `pip install StudentScore[llm]`
+  (`StudentScore/llm.py`).
+- `score-grade` composite GitHub Action computing the objective mark (build +
+  tests) and publishing it as a heig-classroom `GRADE` annotation
+  (`.github/actions/score-grade/`).
+- Reusable two-tier grading workflow (`workflow_call`) so student repositories
+  only carry a thin shim: `objective` job on push, `llm-review` job on
+  `repository_dispatch` from heig-classroom (`.github/workflows/grading.yml`).
+
+### Fixed
+
+- Default-command forwarding (`score criteria.yml`) now works with click ≥ 8.2:
+  the group inserts the hidden default command in `parse_args` instead of
+  relying on the removed `Context.protected_args` (`StudentScore/__main__.py`).
+- CLI tests no longer use `CliRunner.isolated_filesystem`, removed in click 8.3
+  (`tests/test_cli.py`).
 
 ### Changed
 

@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import tempfile
 from unittest import TestCase
 
 from typer.testing import CliRunner
@@ -68,8 +69,8 @@ class TestCli(TestCase):
         runner = CliRunner()
         source = self.directory.joinpath("criteria.yml")
 
-        with runner.isolated_filesystem():
-            target = Path("criteria.yml")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target = Path(tmpdir) / "criteria.yml"
             target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
 
             result = runner.invoke(app, ["update", str(target)])

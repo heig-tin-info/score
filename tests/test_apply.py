@@ -72,7 +72,9 @@ class TestApplyResults(TestCase):
         updated, applied, _ = apply_results(
             self._v2(), {"bonus.creativity": {"awarded_points": 1}}
         )
-        self.assertEqual(updated["criteria"]["bonus"]["creativity"]["awarded_points"], 1)
+        self.assertEqual(
+            updated["criteria"]["bonus"]["creativity"]["awarded_points"], 1
+        )
         self.assertIn("bonus.creativity", applied)
 
     def test_reports_unknown_criteria(self):

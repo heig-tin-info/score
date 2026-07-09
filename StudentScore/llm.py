@@ -10,9 +10,10 @@ grading tier; the per-commit CI tier stays deterministic and never calls this.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Mapping, Tuple
+from typing import Any, Dict, List, Mapping
 
 from .grading import _iter_leaves, build_prompt
+
 
 DEFAULT_MODEL = "claude-opus-4-8"
 

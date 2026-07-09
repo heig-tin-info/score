@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0] - 2026-07-10
 
 ### Added
 
@@ -26,6 +26,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `score-grade` composite GitHub Action computing the objective mark (build +
   tests) and publishing it as a heig-classroom `GRADE` annotation
   (`.github/actions/score-grade/`).
+- Reusable two-tier grading workflow (`workflow_call`) so student repositories
+  only carry a thin shim: `objective` job on push, `llm-review` job on
+  `repository_dispatch` from heig-classroom (`.github/workflows/grading.yml`).
+
+### Fixed
+
+- Default-command forwarding (`score criteria.yml`) now works with click ≥ 8.2:
+  the group inserts the hidden default command in `parse_args` instead of
+  relying on the removed `Context.protected_args` (`StudentScore/__main__.py`).
+- CLI tests no longer use `CliRunner.isolated_filesystem`, removed in click 8.3
+  (`tests/test_cli.py`).
 
 ### Changed
 

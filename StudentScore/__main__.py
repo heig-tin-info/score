@@ -30,38 +30,14 @@ class _DefaultCommandGroup(TyperGroup):
 
     default_command_name: str | None = None
 
-    def invoke(self, ctx: typer.Context) -> Any:
-        protected_args = None
-        if hasattr(ctx, "protected_args"):
-            protected_args = ctx.protected_args
-        elif hasattr(ctx, "_protected_args"):
-            protected_args = ctx._protected_args
-
-        if (
-            self.default_command_name
-            and protected_args is not None
-            and not protected_args
-            and not ctx.resilient_parsing
-        ):
-            if hasattr(ctx, "protected_args"):
-                ctx.protected_args = [self.default_command_name]
-            else:
-                ctx._protected_args = [self.default_command_name]
-        return super().invoke(ctx)
-
-    def resolve_command(  # type: ignore[override]
-        self,
-        ctx: typer.Context,
-        args: list[str],
-    ) -> tuple[str, click.Command, list[str]]:
-        try:
-            return super().resolve_command(ctx, args)
-        except click.UsageError as exc:
-            if self.default_command_name:
-                command = self.get_command(ctx, self.default_command_name)
-                if command is not None:
-                    return self.default_command_name, command, args
-            raise exc
+    def parse_args(self, ctx: typer.Context, args: list[str]) -> list[str]:
+        # Insert the default command when the invocation does not start with a
+        # known subcommand (e.g. `score criteria.yml` or bare `score`).
+        if self.default_command_name is not None:
+            head = next((arg for arg in args if not arg.startswith("-")), None)
+            if head is None or self.get_command(ctx, head) is None:
+                args = [self.default_command_name, *args]
+        return super().parse_args(ctx, args)
 
 
 class _ScoreCommandGroup(_DefaultCommandGroup):
@@ -168,6 +144,7 @@ def _invoke_cli() -> None:
 
 @app.command(name=DEFAULT_COMMAND_NAME, hidden=True)
 def _default_command(
+    ctx: typer.Context,
     file: Path = typer.Argument(
         DEFAULT_CRITERIA_FILE,
         exists=True,
@@ -184,7 +161,6 @@ def _default_command(
     ),
 ) -> None:
     """Compute the score from a criteria file."""
-    ctx = click.get_current_context()
     verbose = bool((ctx.obj or {}).get("verbose"))
     score = _compute_score(file)
     _print_score(score, verbose=verbose or verbose_flag)

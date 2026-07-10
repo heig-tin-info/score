@@ -7,6 +7,7 @@ name: grading
 #   on:
 #     push:
 #       branches: [main, master]
+#     workflow_dispatch:          # teacher's "grade now" button
 #     repository_dispatch:
 #       types: [grade-final, grade-milestone]
 #   permissions:
@@ -14,7 +15,7 @@ name: grading
 #     checks: write
 #   jobs:
 #     grading:
-#       uses: heig-tin-info/score/.github/workflows/grading.yml@0.7.0
+#       uses: heig-tin-info/score/.github/workflows/grading.yml@0.7.1
 #       secrets: inherit   # exposes the org-level ANTHROPIC_API_KEY
 #       with:
 #         build-command: make
@@ -80,13 +81,16 @@ jobs:
   # Tier 1 — objective mark on every push (no LLM, deterministic, free).
   # ---------------------------------------------------------------------------
   objective:
-    # push only: on a repository_dispatch the llm-review job owns the single
-    # GRADE annotation (two annotations in one run void the grade).
-    # Platform bot commits (sync, revert, deadline) never get graded.
+    # push or manual trigger; on a repository_dispatch the llm-review job owns
+    # the single GRADE annotation (two annotations in one run void the grade).
+    # Platform bot pushes (sync, revert, deadline) never get graded, but a
+    # workflow_dispatch fired BY the platform bot must run: it is the teacher's
+    # "grade now" and executes on the student's own head commit.
     if: >-
-      github.event_name == 'push'
-      && github.actor != 'hgc-prod[bot]'
-      && github.actor != 'hgc-dev[bot]'
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'push'
+          && github.actor != 'hgc-prod[bot]'
+          && github.actor != 'hgc-dev[bot]')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -96,7 +100,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ${{ inputs.apt-packages }}
 
       - name: Grade (objective)
-        uses: heig-tin-info/score/.github/actions/score-grade@0.7.0
+        uses: heig-tin-info/score/.github/actions/score-grade@0.7.1
         with:
           criteria-file: ${{ inputs.criteria-file }}
           build-command: ${{ inputs.build-command }}

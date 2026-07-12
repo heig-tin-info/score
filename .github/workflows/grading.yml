@@ -15,7 +15,7 @@ name: grading
 #     checks: write
 #   jobs:
 #     grading:
-#       uses: heig-tin-info/score/.github/workflows/grading.yml@0.7.1
+#       uses: heig-tin-info/score/.github/workflows/grading.yml@0.7.2
 #       secrets:
 #         # `secrets: inherit` would NOT forward org secrets across the org
 #         # boundary (this reusable lives in heig-tin-info): map explicitly.
@@ -96,14 +96,14 @@ jobs:
           && github.actor != 'hgc-dev[bot]')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install build tooling
         if: inputs.apt-packages != ''
         run: sudo apt-get update && sudo apt-get install -y ${{ inputs.apt-packages }}
 
       - name: Grade (objective)
-        uses: heig-tin-info/score/.github/actions/score-grade@0.7.1
+        uses: heig-tin-info/score/.github/actions/score-grade@0.7.2
         with:
           criteria-file: ${{ inputs.criteria-file }}
           build-command: ${{ inputs.build-command }}
@@ -121,7 +121,7 @@ jobs:
     if: github.event_name == 'repository_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # give the LLM access to the git history if needed
           # heig-classroom passes the frozen commit to grade; fall back to HEAD.
@@ -131,7 +131,7 @@ jobs:
         if: inputs.apt-packages != ''
         run: sudo apt-get update && sudo apt-get install -y ${{ inputs.apt-packages }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ inputs.python-version }}
 
@@ -158,7 +158,13 @@ jobs:
       - name: Publish grade
         if: always()
         run: |
-          MARK=$(score json GRADING.yml | python -c "import sys,json;print(f\"{json.load(sys.stdin)['mark']:g}\")" 2>/dev/null || echo 1)
+          # An infrastructure failure (no review produced) must NOT become a
+          # student grade: fail without any GRADE annotation.
+          if [ ! -f GRADING.yml ]; then
+            echo "::error title=GRADING::LLM review produced no GRADING.yml — no grade emitted"
+            exit 1
+          fi
+          MARK=$(score json GRADING.yml | python -c "import sys,json;print(f\"{json.load(sys.stdin)['mark']:g}\")")
           echo "::notice title=GRADE::${MARK}/${{ inputs.scale }}"
 
       - name: Commit the review file

@@ -40,10 +40,10 @@ def _read_criterion_max(criteria_path: str, dotted_id: str) -> float | None:
     return None
 
 
-def _test_ratio(report: Path) -> tuple[float, str]:
-    """Return (pass_ratio, summary) parsed from a JUnit XML report."""
+def _test_ratio(report: Path) -> tuple[float, str, int, int]:
+    """Return (pass_ratio, summary, passed, total) parsed from a JUnit XML report."""
     if not report.exists():
-        return 0.0, "no test report produced"
+        return 0.0, "no test report produced", 0, 0
     tree = ElementTree.parse(report)
     root = tree.getroot()
     suites = [root] if root.tag == "testsuite" else root.findall("testsuite")
@@ -55,10 +55,10 @@ def _test_ratio(report: Path) -> tuple[float, str]:
         skipped += int(suite.get("skipped", 0))
     effective = total - skipped
     if effective <= 0:
-        return 0.0, "no tests were executed"
+        return 0.0, "no tests were executed", 0, 0
     passed = effective - failures - errors
     ratio = max(0.0, passed / effective)
-    return ratio, f"{passed}/{effective} tests passed"
+    return ratio, f"{passed}/{effective} tests passed", passed, effective
 
 
 def main() -> None:
@@ -76,15 +76,22 @@ def main() -> None:
         }
 
     if build_ok:
-        ratio, summary = _test_ratio(Path("report.xml"))
+        ratio, summary, passed, total = _test_ratio(Path("report.xml"))
     else:
-        ratio, summary = 0.0, "build failed, tests not run"
+        ratio, summary, passed, total = 0.0, "build failed, tests not run", 0, 0
 
     max_points = _read_criterion_max(criteria_file, tests_criterion) or 0.0
     results[tests_criterion] = {
         "awarded_points": round(ratio * max_points, 2),
         "rationale": summary,
     }
+
+    # Step outputs, picked up by the TESTS annotation (stdout carries the
+    # results.json payload, so the counters go through GITHUB_OUTPUT).
+    gh_out = os.environ.get("GITHUB_OUTPUT")
+    if gh_out:
+        with open(gh_out, "a", encoding="utf-8") as fh:
+            fh.write(f"tests_passed={passed}\ntests_total={total}\n")
 
     print(json.dumps(results, indent=2))
 

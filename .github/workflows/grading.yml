@@ -16,7 +16,10 @@ name: grading
 #   jobs:
 #     grading:
 #       uses: heig-tin-info/score/.github/workflows/grading.yml@0.7.1
-#       secrets: inherit   # exposes the org-level ANTHROPIC_API_KEY
+#       secrets:
+#         # `secrets: inherit` would NOT forward org secrets across the org
+#         # boundary (this reusable lives in heig-tin-info): map explicitly.
+#         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 #       with:
 #         build-command: make
 #         test-command: pip install pytest && pytest --junitxml=report.xml
@@ -73,7 +76,7 @@ on:
         default: "StudentScore[llm]"
     secrets:
       ANTHROPIC_API_KEY:
-        description: "Anthropic key for the LLM tier (use `secrets: inherit`)."
+        description: "Anthropic key for the LLM tier (map it explicitly: org secrets do not cross the org boundary with `secrets: inherit`)."
         required: false
 
 jobs:

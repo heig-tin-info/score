@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.4] - 2026-07-14
+
+### Changed
+
+- The `grade-final` review now writes the awarded points and LLM rationales
+  directly INTO the criteria file (in place) instead of a separate
+  GRADING.yml, and the review commit message carries the mark
+  (`grading: 5.9/6 (grade-final)`). Milestone reviews keep their own
+  `GRADING-<name>.yml`: their filter prunes the untagged criteria, so an
+  in-place write would destroy the barème (`.github/workflows/grading.yml`).
+- The "no grade on infrastructure failure" gate now keys on the grading
+  step's outcome rather than the review file's existence (the in-place
+  target always exists).
+
 ## [0.7.3] - 2026-07-14
 
 ### Added

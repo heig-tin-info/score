@@ -90,6 +90,46 @@ def _set_award(
             item["$rationale"] = rationale
 
 
+def filter_milestone(
+    raw_criteria: Mapping[str, Any],
+    name: str,
+) -> Tuple[Dict[str, Any], int]:
+    """Return ``(filtered, kept)`` keeping only leaves tagged with a milestone.
+
+    An intermediate review (``score grade --milestone <name>``) grades only
+    the criteria carrying ``milestone: <name>`` (version 2) or ``$milestone:
+    <name>`` (version 1). Sections left without any leaf are dropped; section
+    descriptions, the ``grading`` block and the other top-level keys are kept
+    so the filtered mapping stays a valid criteria file.
+    """
+    section = raw_criteria.get("criteria")
+    if not isinstance(section, dict):
+        raise ValueError("criteria definition must be a mapping")
+
+    def prune(node: Mapping[str, Any]) -> Dict[str, Any]:
+        kept: Dict[str, Any] = {}
+        for key, value in node.items():
+            skey = str(key)
+            if skey in {"description", "$description", "$desc"}:
+                kept[key] = value
+                continue
+            if not isinstance(value, dict):
+                continue
+            if _is_raw_item(value):
+                if value.get("milestone", value.get("$milestone")) == name:
+                    kept[key] = value
+            else:
+                sub = prune(value)
+                if any(isinstance(child, dict) for child in sub.values()):
+                    kept[key] = sub
+        return kept
+
+    filtered = dict(raw_criteria)
+    filtered["criteria"] = prune(section)
+    kept = sum(1 for _ in _iter_raw_leaves(filtered["criteria"]))
+    return filtered, kept
+
+
 def apply_results(
     raw_criteria: Mapping[str, Any],
     results: Mapping[str, Any],
@@ -130,4 +170,4 @@ def apply_results(
     return updated, applied, unknown
 
 
-__all__ = ["apply_results"]
+__all__ = ["apply_results", "filter_milestone"]

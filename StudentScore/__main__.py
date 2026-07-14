@@ -13,7 +13,7 @@ import typer
 from typer.main import TyperGroup
 
 from . import yaml
-from .apply import apply_results
+from .apply import apply_results, filter_milestone
 from .conversion import upgrade_to_v2
 from .grading import build_prompt
 from .schema import Criteria, CriteriaValidationError
@@ -132,7 +132,7 @@ def _handle_unexpected(exception: Exception) -> None:
 def _invoke_cli() -> None:
     """Execute the Typer application with controlled error handling."""
     try:
-        app(standalone_mode=False)
+        result = app(standalone_mode=False)
     except typer.Exit as exc:
         raise SystemExit(exc.exit_code)
     except click.ClickException as exc:
@@ -140,6 +140,12 @@ def _invoke_cli() -> None:
         raise SystemExit(exc.exit_code)
     except Exception as exc:  # noqa: BLE001
         _handle_unexpected(exc)
+    else:
+        # click's standalone_mode=False RETURNS the exit code of a
+        # typer.Exit raised inside a command instead of raising it; without
+        # this, `score check` on an invalid file exited 0 in CI.
+        if isinstance(result, int) and result != 0:
+            raise SystemExit(result)
 
 
 @app.command(name=DEFAULT_COMMAND_NAME, hidden=True)
@@ -312,10 +318,29 @@ def grade(
         "--model",
         help="Override the grading model (default: claude-opus-4-8).",
     ),
+    milestone: str | None = typer.Option(
+        None,
+        "--milestone",
+        help=(
+            "Intermediate review: grade only the criteria tagged "
+            "`milestone: <name>` in the criteria file."
+        ),
+    ),
 ) -> None:
     """Assemble the grading prompt, or grade with Claude when --llm is set."""
     with file.open("r", encoding="utf-8") as handle:
         raw_criteria = yaml.load(handle, Loader=yaml.FullLoader)
+
+    if milestone is not None:
+        raw_criteria, kept = filter_milestone(raw_criteria, milestone)
+        if kept == 0:
+            typer.secho(
+                f"No criteria tagged with milestone '{milestone}'.",
+                fg="red",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+
     normalized = Criteria(raw_criteria)
 
     if not use_llm:

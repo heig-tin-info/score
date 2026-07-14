@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.3] - 2026-07-14
+
+### Added
+
+- Per-criterion `milestone: <name>` tag (schema v1: `$milestone`) marking the
+  subset graded at an intermediate milestone; validated against
+  `[a-z0-9][a-z0-9_-]*` so the name stays shell- and YAML-safe
+  (`StudentScore/schema.py`, `StudentScore/conversion.py`).
+- `score grade --milestone <name>`: keeps only the tagged criteria (empty
+  sections pruned) for the prompt and the graded output; fails when no
+  criterion carries the tag (`StudentScore/apply.py` `filter_milestone`,
+  `StudentScore/__main__.py`).
+- The reusable grading workflow's `llm-review` job reads
+  `client_payload.milestone` (heig-classroom `grade-milestone` dispatch),
+  grades with `--milestone` and commits the review as `GRADING-<name>.yml`, so
+  the final `GRADING.yml` never overwrites an intermediate review
+  (`.github/workflows/grading.yml`).
+
+### Fixed
+
+- The `score` entry point now propagates the exit code of a `typer.Exit`
+  raised inside a command: click returns the code with
+  `standalone_mode=False` instead of raising, so `score check` on an invalid
+  file (and `score grade --milestone` with an unknown tag) exited 0 in CI
+  (`StudentScore/__main__.py`).
+
 ## [0.7.1] - 2026-07-10
 
 ### Added

@@ -15,6 +15,9 @@ class CriteriaValidationError(ValueError):
 
 
 _PERCENT_PATTERN = re.compile(r"^(-?\d+(?:\.\d+)?)%$")
+# Same rule as the heig-classroom platform: the tag doubles as a CLI argument
+# (`score grade --milestone <name>`) and must stay shell- and YAML-friendly.
+_MILESTONE_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,49}$")
 _MISSING = object()
 
 
@@ -197,6 +200,22 @@ def _extend_path(path: Sequence[Any], *suffix: Any) -> Tuple[Any, ...]:
     return tuple(path) + suffix
 
 
+def _validate_milestone(
+    value: Any,
+    errors: List[Dict[str, Any]],
+    path: Sequence[Any],
+) -> str | None:
+    """Validate a per-criterion milestone tag (intermediate review marker)."""
+    if isinstance(value, str) and _MILESTONE_PATTERN.fullmatch(value):
+        return value
+    _add_error(
+        errors,
+        path,
+        "milestone must match [a-z0-9][a-z0-9_-]* (max 50 characters)",
+    )
+    return None
+
+
 def _validate_item(
     value: Dict[Any, Any],
     errors: List[Dict[str, Any]],
@@ -210,6 +229,7 @@ def _validate_item(
         "$bonus",
         "$rationale",
         "$test",
+        "$milestone",
     }
     result: Dict[str, Any] = {}
     has_description = False
@@ -258,6 +278,12 @@ def _validate_item(
                 _add_error(errors, _extend_path(path, key), "value must be a string")
             else:
                 result[key] = raw_value
+            continue
+
+        if key == "$milestone":
+            tag = _validate_milestone(raw_value, errors, _extend_path(path, key))
+            if tag is not None:
+                result[key] = tag
 
     if has_description and has_desc:
         _add_error(
@@ -394,6 +420,7 @@ def _validate_v2_item(
         "awarded_points",
         "rationale",
         "prompt",
+        "milestone",
     }
     result: Dict[str, Any] = {}
     has_description = False
@@ -429,6 +456,12 @@ def _validate_v2_item(
                 _add_error(errors, _extend_path(path, key), "value must be a string")
             else:
                 result["$test"] = raw_value
+            continue
+
+        if key == "milestone":
+            tag = _validate_milestone(raw_value, errors, _extend_path(path, key))
+            if tag is not None:
+                result["$milestone"] = tag
             continue
 
         if key == "awarded_points":

@@ -15,7 +15,7 @@ name: grading
 #     checks: write
 #   jobs:
 #     grading:
-#       uses: heig-tin-info/score/.github/workflows/grading.yml@0.7.2
+#       uses: heig-tin-info/score/.github/workflows/grading.yml@0.7.3
 #       secrets:
 #         # `secrets: inherit` would NOT forward org secrets across the org
 #         # boundary (this reusable lives in heig-tin-info): map explicitly.
@@ -27,9 +27,13 @@ name: grading
 # Tiers (the caller's event decides which job runs):
 #   - push               -> `objective`: deterministic mark (build + tests),
 #                           published as the single GRADE annotation. Indicative.
-#   - repository_dispatch -> `llm-review`: full LLM correction of the frozen
-#                           commit sent by heig-classroom, committed as
-#                           GRADING.yml + GRADE annotation. Authoritative.
+#   - repository_dispatch -> `llm-review`: LLM correction of the commit sent by
+#                           heig-classroom. `grade-final` reviews the frozen
+#                           commit against the full criteria (GRADING.yml,
+#                           authoritative); `grade-milestone` reviews only the
+#                           criteria tagged `milestone: <name>` and writes
+#                           GRADING-<name>.yml (intermediate, trace-only
+#                           platform-side).
 
 on:
   workflow_call:
@@ -103,7 +107,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ${{ inputs.apt-packages }}
 
       - name: Grade (objective)
-        uses: heig-tin-info/score/.github/actions/score-grade@0.7.2
+        uses: heig-tin-info/score/.github/actions/score-grade@0.7.3
         with:
           criteria-file: ${{ inputs.criteria-file }}
           build-command: ${{ inputs.build-command }}
@@ -144,27 +148,44 @@ jobs:
           (${{ inputs.build-command }}) 2>&1 | tee build-output.txt || true
           (${{ inputs.review-test-command }}) 2>&1 | tee test-output.txt || true
 
+      # grade-milestone carries the milestone name in the client_payload; the
+      # review then covers only the criteria tagged `milestone: <name>` and
+      # lands in its own file, so the final GRADING.yml never overwrites it.
+      # The platform validates the name against [a-z0-9][a-z0-9_-]* (shell-safe).
+      - name: Resolve review target
+        id: review
+        env:
+          MILESTONE: ${{ github.event.client_payload.milestone || '' }}
+        run: |
+          if [ -n "$MILESTONE" ]; then
+            echo "file=GRADING-${MILESTONE}.yml" >> "$GITHUB_OUTPUT"
+            echo "args=--milestone ${MILESTONE}" >> "$GITHUB_OUTPUT"
+          else
+            echo "file=GRADING.yml" >> "$GITHUB_OUTPUT"
+            echo "args=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Grade with Claude
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          score grade "${{ inputs.criteria-file }}" --llm \
+          score grade "${{ inputs.criteria-file }}" --llm ${{ steps.review.outputs.args }} \
             --source build-output.txt \
             --source test-output.txt \
-            -o GRADING.yml
-          # GRADING.yml carries awarded_points + rationale per criterion.
-          score -v GRADING.yml
+            -o "${{ steps.review.outputs.file }}"
+          # The review file carries awarded_points + rationale per criterion.
+          score -v "${{ steps.review.outputs.file }}"
 
       - name: Publish grade
         if: always()
         run: |
           # An infrastructure failure (no review produced) must NOT become a
           # student grade: fail without any GRADE annotation.
-          if [ ! -f GRADING.yml ]; then
-            echo "::error title=GRADING::LLM review produced no GRADING.yml — no grade emitted"
+          if [ ! -f "${{ steps.review.outputs.file }}" ]; then
+            echo "::error title=GRADING::LLM review produced no ${{ steps.review.outputs.file }} — no grade emitted"
             exit 1
           fi
-          MARK=$(score json GRADING.yml | python -c "import sys,json;print(f\"{json.load(sys.stdin)['mark']:g}\")")
+          MARK=$(score json "${{ steps.review.outputs.file }}" | python -c "import sys,json;print(f\"{json.load(sys.stdin)['mark']:g}\")")
           echo "::notice title=GRADE::${MARK}/${{ inputs.scale }}"
 
       - name: Commit the review file
@@ -174,14 +195,14 @@ jobs:
           # Never replace this with a PAT.
           git config user.name "hgc-grader[bot]"
           git config user.email "grader@heig-vd.ch"
-          git add GRADING.yml
+          git add "${{ steps.review.outputs.file }}"
           if git diff --cached --quiet; then
             echo "No grading changes to commit."
           else
             git commit -m "chore(grading): LLM review (${{ github.event.action }})"
-            # HEAD sits on the frozen sha: if the student pushed after the
-            # deadline the default branch moved on and the push is rejected —
-            # park the review on a dedicated `grading` branch instead.
+            # HEAD sits on the dispatched sha: if the student pushed since (or
+            # after the deadline) the default branch moved on and the push is
+            # rejected — park the review on a dedicated `grading` branch.
             git push origin "HEAD:${{ github.event.repository.default_branch }}" \
               || git push --force origin "HEAD:refs/heads/grading"
           fi

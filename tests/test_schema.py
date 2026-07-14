@@ -308,6 +308,56 @@ class TestCriteria(TestCase):
             "pytest -k something",
         )
 
+    def test_milestone_field_v1(self):
+        data = Criteria(
+            {
+                "criteria": {
+                    "test": {
+                        "$description": "Desc",
+                        "$points": [1, 5],
+                        "$milestone": "mid-review",
+                    }
+                }
+            }
+        )
+        self.assertEqual(data["criteria"]["test"]["$milestone"], "mid-review")
+
+    def test_milestone_field_v2(self):
+        data = Criteria(
+            {
+                "schema_version": 2,
+                "criteria": {
+                    "test": {
+                        "description": "Desc",
+                        "awarded_points": 1,
+                        "max_points": 5,
+                        "milestone": "mid-review",
+                    }
+                },
+            }
+        )
+        self.assertEqual(data["criteria"]["test"]["$milestone"], "mid-review")
+
+    def test_milestone_field_rejects_bad_names(self):
+        # The tag doubles as a CLI/shell argument: uppercase, spaces and
+        # leading dashes are refused.
+        for bad in ["Mid Review", "-x", "", 42]:
+            with self.assertRaises(CriteriaValidationError) as exc:
+                Criteria(
+                    {
+                        "schema_version": 2,
+                        "criteria": {
+                            "test": {
+                                "description": "Desc",
+                                "awarded_points": 1,
+                                "max_points": 5,
+                                "milestone": bad,
+                            }
+                        },
+                    }
+                )
+            self.assertIn("milestone must match", str(exc.exception))
+
     def test_test_field_requires_string(self):
         with self.assertRaises(CriteriaValidationError) as exc:
             Criteria(

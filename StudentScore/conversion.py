@@ -53,6 +53,10 @@ def _convert_item_v1_to_v2(item: Mapping[str, Any]) -> Dict[str, Any]:
     if prompt is not None:
         result["prompt"] = prompt
 
+    milestone = item.get("$milestone")
+    if milestone is not None:
+        result["milestone"] = milestone
+
     return result
 
 

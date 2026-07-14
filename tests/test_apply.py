@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from StudentScore.apply import apply_results
+from StudentScore.apply import apply_results, filter_milestone
 from StudentScore.schema import Criteria
 
 
@@ -107,3 +107,75 @@ class TestApplyResults(TestCase):
         self.assertEqual(updated["criteria"]["item"]["$points"], [3, 5])
         self.assertEqual(updated["criteria"]["item"]["$rationale"], "ok")
         self.assertEqual(applied, ["item"])
+
+
+class TestFilterMilestone(TestCase):
+    def _v2(self):
+        return {
+            "schema_version": 2,
+            "grading": {"context": "Be fair."},
+            "criteria": {
+                "structure": {
+                    "description": "Program structure",
+                    "prototypes": {
+                        "description": "Prototypes are declared",
+                        "awarded_points": 0,
+                        "max_points": 2,
+                        "milestone": "mid-review",
+                    },
+                    "style": {
+                        "description": "Consistent style",
+                        "awarded_points": 0,
+                        "max_points": 1,
+                    },
+                },
+                "final": {
+                    "description": "Final behaviour",
+                    "output": {
+                        "description": "Correct output",
+                        "awarded_points": 0,
+                        "max_points": 4,
+                    },
+                },
+            },
+        }
+
+    def test_keeps_only_tagged_leaves(self):
+        filtered, kept = filter_milestone(self._v2(), "mid-review")
+        self.assertEqual(kept, 1)
+        self.assertIn("prototypes", filtered["criteria"]["structure"])
+        self.assertNotIn("style", filtered["criteria"]["structure"])
+        # A section left without any leaf disappears entirely.
+        self.assertNotIn("final", filtered["criteria"])
+        # Section descriptions and the grading block survive the filter.
+        self.assertEqual(
+            filtered["criteria"]["structure"]["description"], "Program structure"
+        )
+        self.assertEqual(filtered["grading"], {"context": "Be fair."})
+
+    def test_filtered_result_validates(self):
+        filtered, _ = filter_milestone(self._v2(), "mid-review")
+        Criteria(filtered)  # should not raise
+
+    def test_unknown_milestone_keeps_nothing(self):
+        filtered, kept = filter_milestone(self._v2(), "nope")
+        self.assertEqual(kept, 0)
+        self.assertEqual(
+            [k for k, v in filtered["criteria"].items() if isinstance(v, dict)], []
+        )
+
+    def test_v1_dollar_milestone(self):
+        raw = {
+            "criteria": {
+                "tagged": {
+                    "$description": "Tagged",
+                    "$points": [0, 2],
+                    "$milestone": "mid-review",
+                },
+                "plain": {"$description": "Plain", "$points": [0, 2]},
+            }
+        }
+        filtered, kept = filter_milestone(raw, "mid-review")
+        self.assertEqual(kept, 1)
+        self.assertIn("tagged", filtered["criteria"])
+        self.assertNotIn("plain", filtered["criteria"])

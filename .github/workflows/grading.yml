@@ -15,7 +15,7 @@ name: grading
 #     checks: write
 #   jobs:
 #     grading:
-#       uses: heig-tin-info/score/.github/workflows/grading.yml@0.7.4
+#       uses: heig-tin-info/score/.github/workflows/grading.yml@0.7.5
 #       secrets:
 #         # `secrets: inherit` would NOT forward org secrets across the org
 #         # boundary (this reusable lives in heig-tin-info): map explicitly.
@@ -108,7 +108,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ${{ inputs.apt-packages }}
 
       - name: Grade (objective)
-        uses: heig-tin-info/score/.github/actions/score-grade@0.7.4
+        uses: heig-tin-info/score/.github/actions/score-grade@0.7.5
         with:
           criteria-file: ${{ inputs.criteria-file }}
           build-command: ${{ inputs.build-command }}
@@ -194,20 +194,41 @@ jobs:
           echo "::notice title=GRADE::${MARK}/${{ inputs.scale }}"
 
       - name: Commit the review
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Pushed with the default GITHUB_TOKEN on purpose: GitHub never
-          # re-triggers workflows for GITHUB_TOKEN pushes, so no grading loop.
-          # Never replace this with a PAT.
+          # re-triggers workflows for GITHUB_TOKEN pushes or API commits, so
+          # no grading loop. Never replace this with a PAT.
           git config user.name "hgc-grader[bot]"
           git config user.email "grader@heig-vd.ch"
+          BASE=$(git rev-parse HEAD)
           git add "${{ steps.review.outputs.file }}"
           if git diff --cached --quiet; then
             echo "No grading changes to commit."
-          else
-            git commit -m "grading: ${{ steps.publish.outputs.mark }}/${{ inputs.scale }} (${{ github.event.action }})"
-            # HEAD sits on the dispatched sha: if the student pushed since (or
-            # after the deadline) the default branch moved on and the push is
-            # rejected — park the review on a dedicated `grading` branch.
-            git push origin "HEAD:${{ github.event.repository.default_branch }}" \
-              || git push --force origin "HEAD:refs/heads/grading"
+            exit 0
           fi
+          MSG="grading: ${{ steps.publish.outputs.mark }}/${{ inputs.scale }} (${{ github.event.action }})"
+          git commit -m "$MSG"
+          # HEAD sat on the dispatched sha: if the student pushed since (or
+          # the deadline bot moved the branch) this push is rejected...
+          if git push origin "HEAD:${{ github.event.repository.default_branch }}"; then
+            exit 0
+          fi
+          # ...then park the review on a `grading` branch — via the API, NOT
+          # a git push: pushing a commit whose tree carries the frozen sha's
+          # workflows is rejected whenever they differ from the default
+          # branch's ("refusing to allow a GitHub App to update workflow
+          # without workflows permission"). The contents API writes only the
+          # review file, so workflows never enter the diff: point `grading`
+          # at the dispatched sha (already known server-side), then PUT the
+          # reviewed file onto that branch.
+          gh api "repos/${{ github.repository }}/git/refs" \
+            -f ref="refs/heads/grading" -f sha="$BASE" \
+            || gh api -X PATCH "repos/${{ github.repository }}/git/refs/heads/grading" \
+                 -f sha="$BASE" -F force=true
+          PREV=$(gh api "repos/${{ github.repository }}/contents/${{ steps.review.outputs.file }}?ref=grading" --jq .sha || true)
+          gh api -X PUT "repos/${{ github.repository }}/contents/${{ steps.review.outputs.file }}" \
+            -f branch="grading" -f message="$MSG" \
+            -f content="$(base64 -w0 "${{ steps.review.outputs.file }}")" \
+            ${PREV:+-f sha="$PREV"}

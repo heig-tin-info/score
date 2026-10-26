@@ -79,25 +79,18 @@ class TestSchemaV3:
         data = Criteria(v3({"a": {"description": "A", "max_points": 2.5}}))
         assert data["criteria"]["a"]["$points"] == [0.0, 2.5]
 
-    def test_percentages_resolve_against_positive_numeric_max(self):
-        data = Criteria(
+    @pytest.mark.parametrize("field", ["max_points", "bonus_points"])
+    @pytest.mark.parametrize("value", ["50%", "-20%", "150%"])
+    def test_percentages_refused(self, field, value):
+        message = errors_of(
             v3(
                 {
                     "a": {"description": "A", "max_points": 6},
-                    "b": {"description": "B", "max_points": 4},
-                    "p": {"description": "P", "max_points": "-50%"},
-                    "x": {"description": "X", "bonus_points": "25%"},
-                    "half": {"description": "H", "max_points": "50%"},
+                    "p": {"description": "P", field: value},
                 }
             )
         )
-        assert data["criteria"]["p"]["$points"] == [0.0, -5]
-        assert data["criteria"]["x"]["$bonus"] == [0.0, 2.5]
-        assert data["criteria"]["half"]["$points"] == [0.0, 5]
-
-    def test_percentage_without_base(self):
-        message = errors_of(v3({"x": {"description": "X", "bonus_points": "10%"}}))
-        assert "percentage needs positive numeric max_points" in message
+        assert "percentages are not accepted in schema version 3" in message
 
     @pytest.mark.parametrize(
         "leaf, expected",
@@ -114,8 +107,8 @@ class TestSchemaV3:
                 "milestone",
             ),
             ({"description": "A", "max_points": 0}, "No points"),
-            ({"description": "A", "max_points": "150%"}, "between -100% and 100%"),
-            ({"description": "A", "max_points": "abc"}, "percentage like"),
+            ({"description": "A", "max_points": "abc"}, "must be a number"),
+            ({"description": "A", "max_points": True}, "must be a number"),
             ({"description": "A", "bonus_points": -2}, "bonus_points must be positive"),
             ({"description": "A", "max_points": 1, "bonus_points": 1}, "not both"),
             ({"description": "A", "command": ["make"]}, "either max_points"),
@@ -260,13 +253,13 @@ class TestArithmetic:
         assert format_points(1234567) == "1234567"
         assert format_points(-0.001) == "0"
 
-    def test_percentage_leaf(self):
+    def test_penalty_and_bonus_leaves(self):
         data = Score(
             v3(
                 {
                     "t": {"description": "T", "max_points": 8, "command": ["t"]},
-                    "p": {"description": "P", "max_points": "-25%", "command": ["p"]},
-                    "b": {"description": "B", "bonus_points": "50%", "command": ["b"]},
+                    "p": {"description": "P", "max_points": -2, "command": ["p"]},
+                    "b": {"description": "B", "bonus_points": 4, "command": ["b"]},
                 }
             ),
             results={"t": (1, 2), "p": (0, 1), "b": (1, 1)},
@@ -395,7 +388,7 @@ class TestResultsFile:
             "schema_version: 2\n"
             "grading:\n  context: Be fair\n"
             "criteria:\n"
-            "  a:\n    description: A\n    max_points: 4\n    awarded_points: '50%'\n"
+            "  a:\n    description: A\n    max_points: 4\n    awarded_points: 2\n"
             "    prompt: Look\n"
         )
         result = CliRunner().invoke(app, ["update", str(criteria)])
@@ -416,3 +409,20 @@ class TestResultsFile:
         result = CliRunner().invoke(app, ["update", str(criteria)])
         assert result.exit_code == 1
         assert "schema_version: 2" in criteria.read_text()
+
+    @pytest.mark.parametrize(
+        "content",
+        [
+            "schema_version: 2\ncriteria:\n  a:\n    description: A\n"
+            "    max_points: 4\n    awarded_points: '50%'\n",
+            "criteria:\n  a:\n    $description: A\n    $points: ['50%', 4]\n",
+        ],
+    )
+    def test_update_refuses_percentages(self, tmp_path, content):
+        criteria = tmp_path / "criteria.yml"
+        criteria.write_text(content)
+        result = CliRunner().invoke(app, ["update", str(criteria)])
+        assert result.exit_code == 1
+        assert "not percentages" in result.output
+        assert "criteria.a." in result.output
+        assert criteria.read_text() == content

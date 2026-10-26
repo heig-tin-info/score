@@ -550,10 +550,6 @@ _V3_LEAF_FIELDS = {
 _V3_LEAF_MARKERS = _V3_LEAF_FIELDS - {"description"}
 
 
-class _Percent(float):
-    """A percentage maximum (``"50%"``), resolved once the tree is known."""
-
-
 def _is_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
@@ -565,18 +561,18 @@ def _v3_amount(
     *,
     bonus: bool,
 ) -> float | None:
-    """Validate a ``max_points``/``bonus_points`` value: a number or ``"50%"``."""
-    if _is_number(value):
-        amount: float = float(value)
-    elif isinstance(value, str) and _PERCENT_PATTERN.fullmatch(value.strip()):
-        percent = float(_PERCENT_PATTERN.fullmatch(value.strip()).group(1))
-        if not -100 <= percent <= 100:
-            _add_error(errors, path, "percentage must be between -100% and 100%")
-            return None
-        amount = _Percent(percent)
-    else:
-        _add_error(errors, path, "points must be a number or a percentage like '50%'")
+    """Validate a ``max_points``/``bonus_points`` value: a number only."""
+    if isinstance(value, str) and _PERCENT_PATTERN.fullmatch(value.strip()):
+        _add_error(
+            errors,
+            path,
+            "percentages are not accepted in schema version 3: give a number",
+        )
         return None
+    if not _is_number(value):
+        _add_error(errors, path, "points must be a number")
+        return None
+    amount = float(value)
     if amount == 0:
         _add_error(errors, path, "No points given to this criteria.")
         return None
@@ -755,40 +751,12 @@ def _validate_v3_criteria(
     value: Any,
     errors: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    """Validate a version 3 tree, resolve its percentages, check awarded points.
-
-    A percentage maximum (``"50%"``, ``"-20%"``) is a share of the base: the
-    sum of the positive numeric ``max_points`` of the whole tree.
-    """
+    """Validate a version 3 tree and the range of its awarded points."""
     root = ("criteria",)
     result = _validate_v3_section(value, errors, root)
-    leaves = list(_iter_normalized_leaves(result))
-
-    base = sum(
-        leaf["$points"][1]
-        for _, leaf in leaves
-        if "$points" in leaf
-        and not isinstance(leaf["$points"][1], _Percent)
-        and leaf["$points"][1] > 0
-    )
-    for path, leaf in leaves:
+    for path, leaf in _iter_normalized_leaves(result):
         key = "$points" if "$points" in leaf else "$bonus"
         awarded, total = leaf[key]
-        field = "max_points" if key == "$points" else "bonus_points"
-        location = root + path + (field,)
-        if isinstance(total, _Percent):
-            if base <= 0:
-                _add_error(
-                    errors,
-                    location,
-                    "a percentage needs positive numeric max_points elsewhere",
-                )
-                continue
-            total = round(base * float(total) / 100.0, 2)
-            if total == 0:
-                _add_error(errors, location, "No points given to this criteria.")
-                continue
-        total = float(total)
         low, high = (0.0, total) if total > 0 else (total, 0.0)
         if not low <= awarded <= high:
             _add_error(

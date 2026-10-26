@@ -95,7 +95,7 @@ criteria:
       milestone: mid                  # [a-z0-9][a-z0-9_-]{0,49}
     warnings:
       description: No compiler warning
-      max_points: -20%                # a penalty; a percentage of the base
+      max_points: -2                  # a penalty
       command: [make, CFLAGS=-Werror]
     readability:
       description: The code reads well
@@ -108,7 +108,7 @@ criteria:
 ```
 
 - The kind of a leaf: `command` makes it automatic (even with a `prompt`); else `prompt` makes it reviewed by the LLM; else the teacher grades it.
-- `max_points` (negative for a penalty) or `bonus_points`: a number or a percentage such as `"50%"`. A percentage is a share of the base, the sum of the positive numeric `max_points` of the whole file.
+- `max_points` (negative for a penalty) or `bonus_points` (positive): numbers only. Percentages (`"50%"`) belong to versions 1 and 2; `score update` refuses to migrate a file that uses them.
 - `awarded_points` is optional (StudentScore's output, 0 when absent). `rationale` is also accepted: `score apply` and `score grade --llm` write it.
 - A name contains neither a dot nor a space; unknown keys are errors; `test:` exists in version 2 only.
 

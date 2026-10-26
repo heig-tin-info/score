@@ -15,7 +15,7 @@ from typer.main import TyperGroup
 
 from . import yaml
 from .apply import apply_results, filter_milestone
-from .conversion import upgrade_to_v3
+from .conversion import find_percentages, upgrade_to_v3
 from .grading import build_prompt
 from .results import (
     DEFAULT_TIMEOUT,
@@ -529,6 +529,18 @@ def update(
             return
         converted = raw_criteria
     else:
+        percentages = find_percentages(raw_criteria.get("criteria"), ("criteria",))
+        if percentages:
+            typer.secho(
+                "This file cannot be migrated to schema version 3: version 3 "
+                "takes numbers only, not percentages. Replace these with "
+                "points, then run `score update` again:",
+                fg="red",
+                err=True,
+            )
+            for location in percentages:
+                typer.echo(f"- {location}", err=True)
+            raise typer.Exit(code=1)
         converted = upgrade_to_v3(normalized, raw_criteria)
         try:
             Criteria(converted)

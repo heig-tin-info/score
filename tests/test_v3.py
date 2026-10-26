@@ -23,6 +23,7 @@ from StudentScore.results import (
     tail_cap,
 )
 from StudentScore.schema import Criteria, CriteriaValidationError
+import yaml
 
 
 PY = sys.executable
@@ -418,11 +419,12 @@ class TestResultsFile:
             "criteria:\n  a:\n    $description: A\n    $points: ['50%', 4]\n",
         ],
     )
-    def test_update_refuses_percentages(self, tmp_path, content):
+    def test_update_converts_percentages(self, tmp_path, content):
         criteria = tmp_path / "criteria.yml"
         criteria.write_text(content)
         result = CliRunner().invoke(app, ["update", str(criteria)])
-        assert result.exit_code == 1
-        assert "not percentages" in result.output
-        assert "criteria.a." in result.output
-        assert criteria.read_text() == content
+        assert result.exit_code == 0, result.output
+        raw = yaml.safe_load(criteria.read_text())
+        assert raw["schema_version"] == 3
+        assert raw["criteria"]["a"]["awarded_points"] == 2
+        assert Criteria(raw)["criteria"]["a"]["$points"] == [2.0, 4]

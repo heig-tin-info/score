@@ -108,7 +108,7 @@ criteria:
 ```
 
 - The kind of a leaf: `command` makes it automatic (even with a `prompt`); else `prompt` makes it reviewed by the LLM; else the teacher grades it.
-- `max_points` (negative for a penalty) or `bonus_points` (positive): numbers only. Percentages (`"50%"`) belong to versions 1 and 2; `score update` refuses to migrate a file that uses them.
+- `max_points` (negative for a penalty) or `bonus_points` (positive): numbers only. `awarded_points` is a number too; `score update` turns a version 1 or 2 percentage (`"50%"`) into its points.
 - `awarded_points` is optional (StudentScore's output, 0 when absent). `rationale` is also accepted: `score apply` and `score grade --llm` write it.
 - A name contains neither a dot nor a space; unknown keys are errors; `test:` exists in version 2 only.
 

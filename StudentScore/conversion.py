@@ -94,29 +94,6 @@ def upgrade_to_v2(data: Mapping[str, Any]) -> Dict[str, Any]:
     }
 
 
-_POINT_KEYS = {"awarded_points", "max_points", "bonus_points", "$points", "$bonus"}
-
-
-def find_percentages(node: Any, path: tuple = ()) -> list:
-    """Return the dotted locations of the percentage points of a raw tree.
-
-    Schema version 3 takes numbers only, so these block a migration.
-    """
-    found = []
-    if not isinstance(node, Mapping):
-        return found
-    for key, value in node.items():
-        here = path + (str(key),)
-        values = value if isinstance(value, list) else [value]
-        if str(key) in _POINT_KEYS and any(
-            isinstance(item, str) and item.strip().endswith("%") for item in values
-        ):
-            found.append(".".join(here))
-        elif isinstance(value, Mapping):
-            found.extend(find_percentages(value, here))
-    return found
-
-
 def upgrade_to_v3(
     data: Mapping[str, Any],
     raw: Mapping[str, Any] | None = None,
@@ -124,7 +101,9 @@ def upgrade_to_v3(
     """Return a version 1 or 2 criteria definition converted to version 3.
 
     The leaf keys of version 2 are those of version 3, so the tree is the
-    version 2 one; the ``grading`` block of ``raw`` (version 2) is kept as is.
+    version 2 one; a percentage ``awarded_points`` becomes its number,
+    resolved against the leaf's maximum as version 2 does; the ``grading``
+    block of ``raw`` (version 2) is kept as is.
     """
     converted = upgrade_to_v2(data)
     result: Dict[str, Any] = {"schema_version": 3}
@@ -135,4 +114,4 @@ def upgrade_to_v3(
     return result
 
 
-__all__ = ["find_percentages", "upgrade_to_v2", "upgrade_to_v3"]
+__all__ = ["upgrade_to_v2", "upgrade_to_v3"]

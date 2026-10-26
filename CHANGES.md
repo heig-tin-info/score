@@ -29,8 +29,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - `score update` now migrates schema versions 1 and 2 to version 3, and
-  refuses (without writing) a file version 3 rejects, including one with a
-  percentage in its points.
+  refuses (without writing) a file version 3 rejects; a percentage
+  `awarded_points` becomes its number (versions 1 and 2 never had a
+  percentage maximum).
 - `score grade --llm` reads a source path ending with `/` as a directory.
 - Versions 1 and 2 stay valid; the 0.7.x `grading.yml` workflow and the
   `score-grade` action are unchanged.

@@ -5,6 +5,7 @@ from functools import lru_cache
 import importlib.resources as resources
 import json as json_module
 from pathlib import Path
+import shlex
 import sys
 from typing import Any
 
@@ -14,8 +15,19 @@ from typer.main import TyperGroup
 
 from . import yaml
 from .apply import apply_results, filter_milestone
-from .conversion import upgrade_to_v2
+from .conversion import upgrade_to_v3
 from .grading import build_prompt
+from .results import (
+    DEFAULT_TIMEOUT,
+    build_results,
+    command_leaves,
+    command_totals,
+    format_points,
+    leaf_points,
+    load_results,
+    parse_fraction,
+    run_command,
+)
 from .schema import Criteria, CriteriaValidationError
 from .score import Score
 
@@ -52,9 +64,16 @@ app = typer.Typer(
 )
 
 
-def _compute_score(path: Path) -> Score:
-    """Instantiate Score with the provided path."""
-    return Score(str(path))
+_RESULTS_OPTION_HELP = (
+    "results.json from `score run`: command criteria earn their points "
+    "from it instead of their awarded_points."
+)
+
+
+def _compute_score(path: Path, results: Path | None = None) -> Score:
+    """Instantiate Score with the provided path (and optional results.json)."""
+    fractions = load_results(results) if results is not None else None
+    return Score(str(path), results=fractions)
 
 
 @lru_cache(maxsize=1)
@@ -165,10 +184,19 @@ def _default_command(
         "-v",
         help="Display detailed points before the final mark.",
     ),
+    results: Path | None = typer.Option(
+        None,
+        "--results",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+        help=_RESULTS_OPTION_HELP,
+    ),
 ) -> None:
     """Compute the score from a criteria file."""
     verbose = bool((ctx.obj or {}).get("verbose"))
-    score = _compute_score(file)
+    score = _compute_score(file, results)
     _print_score(score, verbose=verbose or verbose_flag)
 
 
@@ -182,9 +210,18 @@ def json(
         resolve_path=True,
         help="Path to the criteria file.",
     ),
+    results: Path | None = typer.Option(
+        None,
+        "--results",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+        help=_RESULTS_OPTION_HELP,
+    ),
 ) -> None:
     """Emit the score analysis as JSON."""
-    score = _compute_score(file)
+    score = _compute_score(file, results)
     typer.echo(json_module.dumps(_format_payload(score), indent=2, sort_keys=True))
 
 
@@ -378,6 +415,79 @@ def grade(
 
 
 @app.command()
+def run(
+    file: Path = typer.Argument(
+        DEFAULT_CRITERIA_FILE,
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+        help="Path to the criteria file (schema version 3).",
+    ),
+    output: Path = typer.Option(
+        Path("results.json"),
+        "--output",
+        "-o",
+        dir_okay=False,
+        writable=True,
+        resolve_path=True,
+        help="Destination of the results file.",
+    ),
+    timeout: float = typer.Option(
+        DEFAULT_TIMEOUT,
+        "--timeout",
+        min=1,
+        help="Wall-clock limit of each command, in seconds.",
+    ),
+    print_points: bool = typer.Option(
+        False,
+        "--points",
+        help="Print `points/max` of the command criteria on stdout.",
+    ),
+) -> None:
+    """Run the `command` of each criterion and write results.json."""
+    with file.open("r", encoding="utf-8") as handle:
+        normalized = Criteria(yaml.load(handle, Loader=yaml.FullLoader))
+
+    leaves = list(command_leaves(normalized))
+    if not leaves:
+        typer.secho("No criterion carries a `command`.", fg="yellow", err=True)
+
+    outcomes = {}
+    fractions = {}
+    for cid, leaf in leaves:
+        typer.echo(f"$ {shlex.join(leaf['$command'])}", err=True)
+        outcome = run_command(leaf["$command"], file.parent, timeout)
+        outcomes[cid] = outcome
+        fractions[cid] = parse_fraction(outcome.score)
+        key = "$points" if "$points" in leaf else "$bonus"
+        total = leaf[key][1]
+        earned = leaf_points(leaf, *fractions[cid])
+        kind = "bonus " if key == "$bonus" else ""
+        typer.echo(
+            f"  {cid}: {outcome.score} -> "
+            f"{format_points(earned)} / {kind}{format_points(total)} points",
+            err=True,
+        )
+
+    payload = build_results(outcomes)
+    output.write_text(
+        json_module.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    points, maximum = command_totals(normalized, fractions)
+    typer.secho(
+        f"Commands: {format_points(points)}/{format_points(maximum)} points "
+        f"-> {output}",
+        fg="green",
+        err=True,
+    )
+    if print_points:
+        typer.echo(f"{format_points(points)}/{format_points(maximum)}")
+
+
+@app.command()
 def schema() -> None:
     """Display the JSON schema for the analysis payload."""
     typer.echo(json_module.dumps(_load_result_schema(), indent=2, sort_keys=True))
@@ -403,21 +513,34 @@ def update(
         help="Optional destination file. Defaults to in-place upgrade.",
     ),
 ) -> None:
-    """Migrate a criteria file from schema version 1 to version 2."""
+    """Migrate a criteria file from schema version 1 or 2 to version 3."""
     with file.open("r", encoding="utf-8") as handle:
         raw_criteria = yaml.load(handle, Loader=yaml.FullLoader)
 
     normalized = Criteria(raw_criteria)
     schema_version = normalized.get("schema_version", 1)
 
-    if schema_version == 2 and output is None:
-        typer.secho(
-            "Criteria already use schema version 2; no changes written.",
-            fg="yellow",
-        )
-        return
-
-    converted = upgrade_to_v2(normalized)
+    if schema_version == 3:
+        if output is None:
+            typer.secho(
+                "Criteria already use schema version 3; no changes written.",
+                fg="yellow",
+            )
+            return
+        converted = raw_criteria
+    else:
+        converted = upgrade_to_v3(normalized, raw_criteria)
+        try:
+            Criteria(converted)
+        except CriteriaValidationError as exc:
+            typer.secho(
+                "This file cannot be migrated to schema version 3 as is; "
+                "fix the following, then run `score update` again:",
+                fg="red",
+                err=True,
+            )
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=1)
     destination = output or file
     with destination.open("w", encoding="utf-8") as handle:
         yaml.dump(
@@ -429,7 +552,7 @@ def update(
         )
 
     typer.secho(
-        f"Criteria upgraded to schema version 2 and written to {destination}",
+        f"Criteria upgraded to schema version 3 and written to {destination}",
         fg="green",
     )
 

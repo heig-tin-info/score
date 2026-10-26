@@ -1,0 +1,116 @@
+name: run
+
+# Reusable workflow of StudentScore 1.0 for the Quiz platform (criteria
+# schema version 3). The lab repository keeps a constant, protected shim at
+# `.github/workflows/grading.yml`, pinned by sha:
+#
+#   name: grading
+#   on:
+#     push:
+#     workflow_dispatch:
+#     repository_dispatch:
+#       types: [quiz-grade]
+#   run-name: grading ${{ github.event.client_payload.nonce || github.sha }}
+#   jobs:
+#     grading:
+#       uses: heig-tin-info/score/.github/workflows/run.yml@<sha of 1.0.0>
+#
+# The commands live in criteria.yml (`command:` leaves). This workflow runs
+# them on the commit Quiz sent (`client_payload.sha`) or on the pushed one,
+# uploads ONE artifact named `results` holding results.json, and prints the
+# indicative score as `::notice title=GRADE::<points>/<max>` (points, never a
+# mark) over the command criteria.
+#
+# The 0.7.x pipeline (`grading.yml`) is unchanged for its existing users.
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: "Python version to set up."
+        type: string
+        default: "3.12"
+      apt-packages:
+        description: "Space-separated apt packages installed first (blank to skip)."
+        type: string
+        default: ""
+      criteria-file:
+        description: "Path to the criteria file, relative to the repository root."
+        type: string
+        default: "criteria.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Quiz's dispatch names the commit to grade; a push grades itself.
+          ref: ${{ github.event.client_payload.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install apt packages
+        if: inputs.apt-packages != ''
+        env:
+          APT_PACKAGES: ${{ inputs.apt-packages }}
+        run: |
+          sudo apt-get update
+          # Word splitting is intended: one argument per package.
+          sudo apt-get install -y $APT_PACKAGES
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install StudentScore (same commit as this workflow)
+        env:
+          # The commit of THIS reusable workflow file, not the caller's.
+          SCORE_SHA: ${{ job.workflow_sha }}
+        run: |
+          if [ -z "$SCORE_SHA" ]; then
+            echo "::error title=SCORE::cannot resolve the commit of the reusable workflow"
+            exit 1
+          fi
+          python -m pip install --upgrade pip
+          python -m pip install "StudentScore @ git+https://github.com/heig-tin-info/score@${SCORE_SHA}"
+
+      - name: Run the criteria commands
+        id: run
+        env:
+          CRITERIA_FILE: ${{ inputs.criteria-file }}
+        run: |
+          score run "$CRITERIA_FILE" -o "$GITHUB_WORKSPACE/results.json" --points > points.txt
+          echo "points=$(cat points.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: results
+          path: results.json
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Publish the score
+        if: steps.run.outcome == 'success'
+        env:
+          POINTS: ${{ steps.run.outputs.points }}
+        run: |
+          # Quiz reads exactly one GRADE annotation, `points/max` with
+          # max > 0 and points <= max: a bonus never lifts the points above
+          # the max, and no command criterion with points means no score.
+          python - <<'EOF'
+          import os
+          from StudentScore.results import format_points
+          points, maximum = (float(x) for x in os.environ["POINTS"].split("/"))
+          if maximum <= 0:
+              print("::warning title=SCORE::no command criterion carries positive points")
+          else:
+              shown = format_points(min(points, maximum))
+              print(f"::notice title=GRADE::{shown}/{format_points(maximum)}")
+          EOF

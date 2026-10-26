@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - Unreleased
+
+### Added
+
+- Criteria schema version 3, the Quiz platform's contract: a leaf takes
+  `description` (or `desc`), `max_points` or `bonus_points` (a number or a
+  percentage of the base, the sum of the positive numeric maxima),
+  `awarded_points` (optional), `prompt`, `command` (argv, 1 to 20 strings),
+  `milestone` and `rationale`; names contain no dot and no space;
+  `grading.sources` are plain paths (`StudentScore/schema.py`).
+- `score run`: runs each leaf's `command` without a shell, in the criteria
+  file's directory, with a timeout (`--timeout`, 120 s), reads `n/m` from
+  the last stdout line or falls back on the exit code, and writes
+  `results.json` (`results-1.json` schema, logs tail-capped to 8 KiB, the
+  file under 256 KiB) (`StudentScore/results.py`, `StudentScore/__main__.py`).
+- Points from a fraction: `max × f`, a penalty `max × (1 − f)`, a bonus
+  `bonus × f`, rounded to 0.01; `score` and `score json` take
+  `--results results.json` for the command leaves.
+- Reusable workflow `.github/workflows/run.yml` for the Quiz shim: checks out
+  `client_payload.sha`, uploads the `results` artifact and prints
+  `GRADE::<points>/<max>`, never a mark.
+
+### Changed
+
+- `score update` now migrates schema versions 1 and 2 to version 3, and
+  refuses (without writing) a file version 3 rejects.
+- `score grade --llm` reads a source path ending with `/` as a directory.
+- Versions 1 and 2 stay valid; the 0.7.x `grading.yml` workflow and the
+  `score-grade` action are unchanged.
+
 ## [0.7.4] - 2026-07-14
 
 ### Changed

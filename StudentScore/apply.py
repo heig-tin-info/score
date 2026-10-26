@@ -46,10 +46,12 @@ def _iter_raw_leaves(
 def _clamp(points: float, item: Dict[str, Any]) -> Tuple[float, str | None]:
     """Clamp awarded points to the criterion's valid range; return a note if changed."""
     total: float | None = None
-    if "max_points" in item:
-        total = float(item["max_points"])
-    elif "bonus_points" in item:
-        total = float(item["bonus_points"])
+    if "max_points" in item or "bonus_points" in item:
+        # A version 3 percentage ("50%") is resolved against the whole tree:
+        # the validation of the merged file checks its range instead.
+        raw = item.get("max_points", item.get("bonus_points"))
+        if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+            total = float(raw)
     elif "$points" in item and isinstance(item["$points"], list):
         total = float(item["$points"][1])
     elif "$bonus" in item and isinstance(item["$bonus"], list):

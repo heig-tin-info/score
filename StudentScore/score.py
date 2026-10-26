@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from collections import namedtuple
+import copy
 from dataclasses import dataclass
-from typing import Any, Mapping, MutableMapping, TextIO
+from typing import Any, Mapping, MutableMapping, TextIO, Tuple
 
 from . import yaml
+from .results import command_leaves, leaf_points
 from .schema import Criteria
 
 
@@ -25,8 +27,18 @@ class _Accumulator:
 class Score:
     """Compute aggregate grade statistics from a criteria definition."""
 
-    def __init__(self, data: str | TextIO | Mapping[str, Any]) -> None:
-        """Load YAML content, validate it, and store normalized data."""
+    def __init__(
+        self,
+        data: str | TextIO | Mapping[str, Any],
+        results: Mapping[str, Tuple[float, float]] | None = None,
+    ) -> None:
+        """Load YAML content, validate it, and store normalized data.
+
+        ``results`` maps dotted ids to ``(n, m)`` fractions (from a
+        ``results.json``): when given, every ``command`` leaf earns its points
+        from its fraction, and 0 when it has none, instead of its
+        ``awarded_points``.
+        """
         normalized_data: Mapping[str, Any]
 
         if hasattr(data, "read"):
@@ -38,6 +50,14 @@ class Score:
                 )
         else:
             normalized_data = Criteria(data)
+
+        if results is not None:
+            normalized_data = copy.deepcopy(dict(normalized_data))
+            for cid, leaf in command_leaves(normalized_data):
+                key = "$points" if "$points" in leaf else "$bonus"
+                fraction = results.get(cid)
+                earned = leaf_points(leaf, *fraction) if fraction else 0.0
+                leaf[key] = [earned, leaf[key][1]]
 
         self.data = normalized_data
 

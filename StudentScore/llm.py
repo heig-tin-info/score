@@ -125,6 +125,9 @@ def collect_sources(patterns: List[str], root: str = ".") -> Dict[str, str]:
     base = Path(root)
     collected: Dict[str, str] = {}
     for pattern in patterns:
+        # Schema version 3: a directory is a plain path ending with "/".
+        if pattern.endswith("/"):
+            pattern += "**/*"
         for path in sorted(base.glob(pattern)):
             if path.is_file():
                 try:

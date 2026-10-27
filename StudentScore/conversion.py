@@ -94,4 +94,24 @@ def upgrade_to_v2(data: Mapping[str, Any]) -> Dict[str, Any]:
     }
 
 
-__all__ = ["upgrade_to_v2"]
+def upgrade_to_v3(
+    data: Mapping[str, Any],
+    raw: Mapping[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Return a version 1 or 2 criteria definition converted to version 3.
+
+    The leaf keys of version 2 are those of version 3, so the tree is the
+    version 2 one; a percentage ``awarded_points`` becomes its number,
+    resolved against the leaf's maximum as version 2 does; the ``grading``
+    block of ``raw`` (version 2) is kept as is.
+    """
+    converted = upgrade_to_v2(data)
+    result: Dict[str, Any] = {"schema_version": 3}
+    grading = (raw or {}).get("grading")
+    if grading is not None:
+        result["grading"] = grading
+    result["criteria"] = converted["criteria"]
+    return result
+
+
+__all__ = ["upgrade_to_v2", "upgrade_to_v3"]

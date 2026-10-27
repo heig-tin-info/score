@@ -17,7 +17,8 @@ class TestHelp(TestCase):
 
         self.assertEqual(result.exit_code, 2)
         self.assertIn("Usage", result.output)
-        self.assertIn("Invalid value for '[FILE]'", result.output)
+        # The argument's rendering ('[FILE]' or 'file') depends on typer.
+        self.assertIn("Invalid value for", result.output)
 
 
 class TestCli(TestCase):
@@ -121,9 +122,9 @@ class TestCli(TestCase):
             result = runner.invoke(app, ["update", str(target)])
 
             self.assertEqual(result.exit_code, 0)
-            self.assertIn("schema version 2", result.output)
+            self.assertIn("schema version 3", result.output)
 
             content = target.read_text(encoding="utf-8")
-            self.assertIn("schema_version: 2", content)
+            self.assertIn("schema_version: 3", content)
             self.assertIn("max_points: -4", content)
             self.assertIn("awarded_points: -2", content)

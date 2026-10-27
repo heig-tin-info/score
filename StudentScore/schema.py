@@ -19,6 +19,10 @@ _PERCENT_PATTERN = re.compile(r"^(-?\d+(?:\.\d+)?)%$")
 # (`score grade --milestone <name>`) and must stay shell- and YAML-friendly.
 _MILESTONE_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,49}$")
 _MISSING = object()
+# Version 3: a criterion name is one segment of a dotted id.
+_NAME_PATTERN = re.compile(r"^[^.\s]+$")
+_WILDCARD_PATTERN = re.compile(r"[*?\[]")
+_MAX_COMMAND_ARGS = 20
 
 
 def _add_error(
@@ -526,6 +530,254 @@ def _validate_v2_item(
     return result
 
 
+# ---------------------------------------------------------------------------
+# Schema version 3 (the Quiz platform's criteria-3 contract).
+# ---------------------------------------------------------------------------
+
+_V3_LEAF_FIELDS = {
+    "description",
+    "desc",
+    "max_points",
+    "bonus_points",
+    "awarded_points",
+    "prompt",
+    "command",
+    "milestone",
+    # StudentScore extension: `score apply` / `score grade --llm` write it.
+    "rationale",
+}
+# A mapping carrying one of these keys is a leaf, never a section.
+_V3_LEAF_MARKERS = _V3_LEAF_FIELDS - {"description"}
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _v3_amount(
+    value: Any,
+    errors: List[Dict[str, Any]],
+    path: Sequence[Any],
+    *,
+    bonus: bool,
+) -> float | None:
+    """Validate a ``max_points``/``bonus_points`` value: a number only."""
+    if isinstance(value, str) and _PERCENT_PATTERN.fullmatch(value.strip()):
+        _add_error(
+            errors,
+            path,
+            "percentages are not accepted in schema version 3: give a number",
+        )
+        return None
+    if not _is_number(value):
+        _add_error(errors, path, "points must be a number")
+        return None
+    amount = float(value)
+    if amount == 0:
+        _add_error(errors, path, "No points given to this criteria.")
+        return None
+    if bonus and amount < 0:
+        _add_error(errors, path, "bonus_points must be positive")
+        return None
+    return amount
+
+
+def _validate_v3_command(
+    value: Any,
+    errors: List[Dict[str, Any]],
+    path: Sequence[Any],
+) -> List[str] | None:
+    """A command is an argv list of 1 to 20 strings, never a shell string."""
+    if (
+        not isinstance(value, list)
+        or not 1 <= len(value) <= _MAX_COMMAND_ARGS
+        or not all(isinstance(item, str) for item in value)
+        or not value[0]
+    ):
+        _add_error(
+            errors,
+            path,
+            f"command must be a list of 1 to {_MAX_COMMAND_ARGS} strings "
+            "(argv, no shell), the first one non-empty",
+        )
+        return None
+    return list(value)
+
+
+def _validate_v3_item(
+    value: Dict[Any, Any],
+    errors: List[Dict[str, Any]],
+    path: Sequence[Any],
+) -> Dict[str, Any]:
+    """Validate a version 3 leaf and normalize it to the internal layout."""
+    result: Dict[str, Any] = {}
+    fields: Dict[str, Any] = {}
+    for raw_key, raw_value in value.items():
+        key = str(raw_key)
+        if key not in _V3_LEAF_FIELDS:
+            message = "unrecognized criteria field"
+            if key == "test":
+                message += " (`test` is version 2 only: use `command` or `prompt`)"
+            _add_error(errors, _extend_path(path, key), message)
+            continue
+        fields[key] = raw_value
+
+    if "description" in fields and "desc" in fields:
+        _add_error(errors, path, "use either description or desc, not both")
+    text = fields.get("description", fields.get("desc", _MISSING))
+    if text is _MISSING:
+        _add_error(errors, path, "description must be provided for each criterion")
+    elif not isinstance(text, str):
+        _add_error(
+            errors,
+            _extend_path(path, "description" if "description" in fields else "desc"),
+            "value must be a string",
+        )
+    else:
+        result["$description"] = text
+
+    if "rationale" in fields:
+        rationale = _ensure_text_or_text_list(
+            fields["rationale"], errors, _extend_path(path, "rationale")
+        )
+        if rationale is not None:
+            result["$rationale"] = rationale
+
+    if "prompt" in fields:
+        if isinstance(fields["prompt"], str):
+            result["$test"] = fields["prompt"]
+        else:
+            _add_error(errors, _extend_path(path, "prompt"), "value must be a string")
+
+    if "command" in fields:
+        command = _validate_v3_command(
+            fields["command"], errors, _extend_path(path, "command")
+        )
+        if command is not None:
+            result["$command"] = command
+
+    if "milestone" in fields:
+        tag = _validate_milestone(
+            fields["milestone"], errors, _extend_path(path, "milestone")
+        )
+        if tag is not None:
+            result["$milestone"] = tag
+
+    awarded: float = 0.0
+    if "awarded_points" in fields:
+        if _is_number(fields["awarded_points"]):
+            awarded = float(fields["awarded_points"])
+        else:
+            _add_error(
+                errors,
+                _extend_path(path, "awarded_points"),
+                "awarded_points must be a number",
+            )
+
+    if "max_points" in fields and "bonus_points" in fields:
+        _add_error(errors, path, "use either max_points or bonus_points, not both")
+    elif "max_points" in fields:
+        total = _v3_amount(
+            fields["max_points"], errors, _extend_path(path, "max_points"), bonus=False
+        )
+        if total is not None:
+            result["$points"] = [awarded, total]
+    elif "bonus_points" in fields:
+        total = _v3_amount(
+            fields["bonus_points"],
+            errors,
+            _extend_path(path, "bonus_points"),
+            bonus=True,
+        )
+        if total is not None:
+            result["$bonus"] = [awarded, total]
+    else:
+        _add_error(errors, path, "either max_points or bonus_points must be provided")
+
+    return result
+
+
+def _validate_v3_section(
+    value: Any,
+    errors: List[Dict[str, Any]],
+    path: Sequence[Any],
+) -> Dict[str, Any]:
+    """Validate a version 3 section: an optional description and children."""
+    if not isinstance(value, dict):
+        _add_error(errors, path, "criteria entries must be mappings")
+        return {}
+
+    result: Dict[str, Any] = {}
+    for raw_key, raw_value in value.items():
+        key = str(raw_key)
+        if key == "description":
+            text_value = _ensure_section_text(
+                raw_value, errors, _extend_path(path, key)
+            )
+            if text_value is not None:
+                result["$description"] = text_value
+            continue
+        child_path = _extend_path(path, key)
+        if not _NAME_PATTERN.fullmatch(key):
+            _add_error(
+                errors, child_path, "a name may contain neither a dot nor a space"
+            )
+            continue
+        if not isinstance(raw_value, dict):
+            _add_error(errors, child_path, "criteria entries must be mappings")
+            continue
+        if {str(k) for k in raw_value} & _V3_LEAF_MARKERS:
+            result[key] = _validate_v3_item(raw_value, errors, child_path)
+        else:
+            result[key] = _validate_v3_section(raw_value, errors, child_path)
+    return result
+
+
+def _iter_normalized_leaves(
+    node: Dict[str, Any],
+    prefix: Tuple[str, ...] = (),
+) -> Iterable[Tuple[Tuple[str, ...], Dict[str, Any]]]:
+    """Yield ``(path, leaf)`` for every normalized leaf of a criteria tree."""
+    for key, value in node.items():
+        if key.startswith("$") or not isinstance(value, dict):
+            continue
+        if "$points" in value or "$bonus" in value:
+            yield prefix + (key,), value
+        else:
+            yield from _iter_normalized_leaves(value, prefix + (key,))
+
+
+def _validate_v3_criteria(
+    value: Any,
+    errors: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Validate a version 3 tree and the range of its awarded points."""
+    root = ("criteria",)
+    result = _validate_v3_section(value, errors, root)
+    for path, leaf in _iter_normalized_leaves(result):
+        key = "$points" if "$points" in leaf else "$bonus"
+        awarded, total = leaf[key]
+        low, high = (0.0, total) if total > 0 else (total, 0.0)
+        if not low <= awarded <= high:
+            _add_error(
+                errors,
+                root + path + ("awarded_points",),
+                "awarded_points ({awarded}) must lie between {low} and {high}",
+                ctx={"awarded": awarded, "low": low, "high": high},
+            )
+            continue
+        leaf[key] = [awarded, int(total) if total.is_integer() else total]
+    return result
+
+
+def iter_leaves(
+    data: Dict[str, Any],
+) -> Iterable[Tuple[str, Dict[str, Any]]]:
+    """Yield ``(dotted_id, leaf)`` for every leaf of normalized criteria data."""
+    for path, leaf in _iter_normalized_leaves(data.get("criteria") or {}):
+        yield ".".join(path), leaf
+
+
 def _validate_student(
     value: Any,
     errors: List[Dict[str, Any]],
@@ -570,6 +822,8 @@ def _validate_grading(
     value: Any,
     errors: List[Dict[str, Any]],
     path: Sequence[Any],
+    *,
+    plain_sources: bool = False,
 ) -> Dict[str, Any]:
     """Validate the top-level ``grading`` block guiding LLM-assisted grading."""
     if not isinstance(value, dict):
@@ -596,7 +850,17 @@ def _validate_grading(
             if isinstance(raw_value, list) and all(
                 isinstance(item, str) for item in raw_value
             ):
-                result[key] = raw_value
+                if plain_sources and any(
+                    _WILDCARD_PATTERN.search(item) for item in raw_value
+                ):
+                    _add_error(
+                        errors,
+                        _extend_path(path, key),
+                        "sources are plain paths (a directory ends with /), "
+                        "no wildcard",
+                    )
+                else:
+                    result[key] = raw_value
             else:
                 _add_error(
                     errors,
@@ -634,17 +898,19 @@ def _criteria(data: Any) -> Dict[str, Any]:
                 "schema_version must be an integer",
             )
         else:
-            if schema_version not in {1, 2}:
+            if schema_version not in {1, 2, 3}:
                 _add_error(
                     errors,
                     ("schema_version",),
-                    "schema_version must be either 1 or 2",
+                    "schema_version must be 1, 2 or 3",
                 )
 
     criteria_value = normalized.get("criteria")
     if criteria_value is None:
         _add_error(errors, ("criteria",), "missing criteria definition")
         validated_criteria: Dict[str, Any] = {}
+    elif schema_version == 3:
+        validated_criteria = _validate_v3_criteria(criteria_value, errors)
     elif schema_version == 2:
         validated_criteria = _validate_v2_section(criteria_value, errors, ("criteria",))
     else:
@@ -653,21 +919,26 @@ def _criteria(data: Any) -> Dict[str, Any]:
     grading_value = normalized.get("grading")
     validated_grading: Dict[str, Any] | None = None
     if grading_value is not None:
-        if schema_version != 2:
+        if schema_version not in {2, 3}:
             _add_error(
                 errors,
                 ("grading",),
-                "grading requires schema_version 2",
+                "grading requires schema_version 2 or 3",
             )
         else:
-            validated_grading = _validate_grading(grading_value, errors, ("grading",))
+            validated_grading = _validate_grading(
+                grading_value,
+                errors,
+                ("grading",),
+                plain_sources=schema_version == 3,
+            )
 
     if errors:
         message = _format_validation_errors(errors)
         raise CriteriaValidationError(message, errors=errors)
 
     result = {"criteria": validated_criteria}
-    if "schema_version" in normalized or schema_version == 2:
+    if "schema_version" in normalized or schema_version >= 2:
         result["schema_version"] = schema_version
     if validated_grading is not None:
         result["grading"] = validated_grading
@@ -677,4 +948,4 @@ def _criteria(data: Any) -> Dict[str, Any]:
 
 Criteria = _criteria
 
-__all__ = ["Criteria", "CriteriaValidationError"]
+__all__ = ["Criteria", "CriteriaValidationError", "iter_leaves"]
